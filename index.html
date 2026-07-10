@@ -107,6 +107,11 @@
     display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px;
     box-shadow: 0 1px 4px rgba(0,0,0,.5); border: 2px solid #fff;
   }
+  .status-icon-badge {
+    width: 17px; height: 17px; border-radius: 50%; color: #fff; font-weight: 900; font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,.6); border: 1.5px solid #fff;
+  }
   .route-badge-tooltip { background: transparent; border: none; box-shadow: none; padding: 0; }
   .route-badge-tooltip::before { display: none; }
 
@@ -589,7 +594,10 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 const legend = L.control({ position: "bottomleft" });
 legend.onAdd = function () {
   const div = L.DomUtil.create("div", "legend");
-  let html = "<b>A-Lead:</b> <span class='a-ring'></span> goldener Rand<br><b>Grau/blass:</b> abgeschlossen (kein Interesse/abgelehnt)<hr style='margin:4px 0'>";
+  let html = "<b>A-Lead:</b> <span class='a-ring'></span> goldener Rand<br>" +
+    "<b>✓ grün:</b> schon besucht (jeder Besucht-Status)<br>" +
+    "<b>✕ rot:</b> nicht relevant<br>" +
+    "<b>Grau/blass:</b> abgeschlossen (kein Interesse/abgelehnt)<hr style='margin:4px 0'>";
   Object.entries(CATEGORY_COLORS).forEach(([cat, color]) => {
     html += `<span class="dot" style="background:${color}"></span>${cat}<br>`;
   });
@@ -673,10 +681,39 @@ function colorFor(item) {
   return CATEGORY_COLORS[item.kategorie] || DEFAULT_COLOR;
 }
 
+// ✗ für nicht relevant, ✓ für alles, wo schon ein Besuch stattgefunden hat
+function statusIconFor(status) {
+  if (status === "nicht_relevant") return { symbol: "✕", bg: "#dc2626" };
+  if (status && status !== "offen") return { symbol: "✓", bg: "#16a34a" };
+  return null;
+}
+
+let statusIconMarkers = {};
+function updateStatusIcon(item) {
+  if (statusIconMarkers[item.id]) {
+    markersLayer.removeLayer(statusIconMarkers[item.id]);
+    delete statusIconMarkers[item.id];
+  }
+  if (!item.lat || !item.lng) return;
+  const st = getEntry(item.id);
+  const iconInfo = statusIconFor(st.status);
+  if (!iconInfo) return;
+  const icon = L.divIcon({
+    html: `<div class="status-icon-badge" style="background:${iconInfo.bg}">${iconInfo.symbol}</div>`,
+    className: "", iconSize: [17, 17], iconAnchor: [8, 8],
+  });
+  const m = L.marker([item.lat, item.lng], { icon, interactive: false, zIndexOffset: 1000 });
+  m.addTo(markersLayer);
+  statusIconMarkers[item.id] = m;
+}
+
 function buildMarkers() {
   markersLayer.clearLayers();
+  statusIconMarkers = {};
   const filtered = applyFilters(DATA);
+  let skippedNoCoords = 0;
   filtered.forEach(item => {
+    if (!item.lat || !item.lng) { skippedNoCoords++; return; }
     const isA = item.ab === "A";
     const st = getEntry(item.id);
     const isClosed = st.status === "closed";
@@ -695,8 +732,12 @@ function buildMarkers() {
     marker.on("popupopen", (e) => wirePopup(e.popup, item));
     marker.addTo(markersLayer);
     markerById[item.id] = marker;
+    updateStatusIcon(item);
   });
-  document.getElementById("stats").textContent = `${filtered.length} / ${DATA.length} Leads sichtbar`;
+  const shownCount = filtered.length - skippedNoCoords;
+  document.getElementById("stats").textContent = skippedNoCoords
+    ? `${shownCount} / ${DATA.length} Leads sichtbar (${skippedNoCoords} ohne Kartenkoordinaten)`
+    : `${filtered.length} / ${DATA.length} Leads sichtbar`;
   refreshRouteBadges();
 }
 
@@ -729,6 +770,7 @@ function wirePopup(popup, item) {
     setStatus(item.id, statusSel.value);
     const marker = markerById[item.id];
     if (marker) marker.setStyle({ fillColor: colorFor(item) });
+    updateStatusIcon(item);
     if (currentFilter("f-status")) buildMarkers();
   });
   saveBtn.addEventListener("click", () => {

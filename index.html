@@ -610,7 +610,8 @@ legend.onAdd = function () {
   const startCollapsed = window.innerWidth <= 640;
   if (startCollapsed) div.classList.add("collapsed");
   let bodyHtml = "<b>A-Lead:</b> <span class='a-ring'></span> goldener Rand<br>" +
-    "<b>✓ grün:</b> schon besucht (jeder Besucht-Status)<br>" +
+    "<b>✓ grün:</b> schon besucht<br>" +
+    "<b>! blau:</b> besucht, GF war nicht da (nochmal hin)<br>" +
     "<b>✕ rot:</b> nicht relevant<br>" +
     "<b>Grau/blass:</b> abgeschlossen (kein Interesse/abgelehnt)<hr style='margin:4px 0'>";
   Object.entries(CATEGORY_COLORS).forEach(([cat, color]) => {
@@ -707,6 +708,7 @@ function colorFor(item) {
 // ✗ für nicht relevant, ✓ für alles, wo schon ein Besuch stattgefunden hat
 function statusIconFor(status) {
   if (status === "nicht_relevant") return { symbol: "✕", bg: "#dc2626" };
+  if (status === "besucht_gf_nicht_da") return { symbol: "!", bg: "#2563eb" };
   if (status && status !== "offen") return { symbol: "✓", bg: "#16a34a" };
   return null;
 }

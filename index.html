@@ -71,6 +71,12 @@
   @media (prefers-color-scheme: dark) { .legend { background: rgba(30,33,38,.95); color: #eee; } }
   .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
   .legend .a-ring { display:inline-block; width:10px; height:10px; border-radius:50%; border:2px solid gold; vertical-align:middle; margin-right:5px; }
+  .legend-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; font-weight: 700; }
+  .legend-arrow { transition: transform .15s; }
+  .legend.collapsed .legend-arrow { transform: rotate(-90deg); }
+  .legend-body { margin-top: 6px; }
+  .legend.collapsed .legend-body { display: none; }
+  .legend.collapsed { padding-bottom: 8px; }
 
   .popup-box { font-size: 13px; width: 300px; max-width: 80vw; line-height: 1.45; }
   .leaflet-popup-content { margin: 12px 14px; }
@@ -219,6 +225,13 @@
   .route-stop .rs-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .route-stop .rs-addr { color: #6b7280; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .route-stop .rs-remove { flex-shrink: 0; background: none; border: none; color: #b0492e; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+  .route-stop .rs-move { flex-shrink: 0; display: flex; flex-direction: column; gap: 1px; }
+  .route-stop .rs-move button {
+    background: #e5e7eb; border: none; border-radius: 4px; width: 26px; height: 20px; font-size: 10px;
+    cursor: pointer; color: #374151; padding: 0;
+  }
+  @media (prefers-color-scheme: dark) { .route-stop .rs-move button { background: #2f3f52; color: #cbd5e1; } }
+  .route-stop .rs-move button:disabled { opacity: .25; cursor: default; }
   #route-empty { padding: 20px 12px; color: #6b7280; font-size: 13px; text-align: center; }
   .route-home {
     background: rgba(37,99,235,.08); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; display: flex; gap: 8px; align-items: center;
@@ -594,14 +607,24 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 const legend = L.control({ position: "bottomleft" });
 legend.onAdd = function () {
   const div = L.DomUtil.create("div", "legend");
-  let html = "<b>A-Lead:</b> <span class='a-ring'></span> goldener Rand<br>" +
+  const startCollapsed = window.innerWidth <= 640;
+  if (startCollapsed) div.classList.add("collapsed");
+  let bodyHtml = "<b>A-Lead:</b> <span class='a-ring'></span> goldener Rand<br>" +
     "<b>✓ grün:</b> schon besucht (jeder Besucht-Status)<br>" +
     "<b>✕ rot:</b> nicht relevant<br>" +
     "<b>Grau/blass:</b> abgeschlossen (kein Interesse/abgelehnt)<hr style='margin:4px 0'>";
   Object.entries(CATEGORY_COLORS).forEach(([cat, color]) => {
-    html += `<span class="dot" style="background:${color}"></span>${cat}<br>`;
+    bodyHtml += `<span class="dot" style="background:${color}"></span>${cat}<br>`;
   });
-  div.innerHTML = html;
+  div.innerHTML = `
+    <div class="legend-head"><span>Legende</span><span class="legend-arrow">▾</span></div>
+    <div class="legend-body">${bodyHtml}</div>
+  `;
+  div.querySelector(".legend-head").addEventListener("click", (e) => {
+    div.classList.toggle("collapsed");
+    L.DomEvent.stopPropagation(e);
+  });
+  L.DomEvent.disableClickPropagation(div);
   return div;
 };
 legend.addTo(map);
@@ -1038,13 +1061,17 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 }).addTo(routeMap);
 const routeLayer = L.layerGroup().addTo(routeMap);
 
-function routeStopHtml(item, index) {
+function routeStopHtml(item, index, total) {
   return `
     <div class="route-stop" draggable="true" data-id="${item.id}">
       <span class="rs-num">${index + 1}</span>
       <div class="rs-info">
         <div class="rs-name">${escapeHtml(item.name)}</div>
         <div class="rs-addr">${escapeHtml(item.adresse)}</div>
+      </div>
+      <div class="rs-move">
+        <button class="rs-up" data-up="${item.id}" title="Nach oben" ${index === 0 ? "disabled" : ""}>▲</button>
+        <button class="rs-down" data-down="${item.id}" title="Nach unten" ${index === total - 1 ? "disabled" : ""}>▼</button>
       </div>
       <button class="rs-remove" data-remove="${item.id}" title="Entfernen">✕</button>
     </div>
@@ -1057,7 +1084,7 @@ function renderRoute() {
 
   const homeHtml = `<div class="route-home"><span class="rs-num">🏠</span><div class="rs-info"><div class="rs-name">Start</div><div class="rs-addr">${escapeHtml(routeState.start || "")}</div></div></div>`;
   listEl.innerHTML = homeHtml + (stops.length
-    ? stops.map(routeStopHtml).join("")
+    ? stops.map((item, index) => routeStopHtml(item, index, stops.length)).join("")
     : `<div id="route-empty">Noch keine Stationen. Firma oben suchen und mit + hinzufügen.</div>`);
 
   // drag & drop reorder
@@ -1082,6 +1109,26 @@ function renderRoute() {
     btn.addEventListener("click", () => {
       routeState.stopIds = routeState.stopIds.filter(id => id !== btn.dataset.remove);
       saveRoute();
+    });
+  });
+  listEl.querySelectorAll(".rs-up").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.up;
+      const idx = routeState.stopIds.indexOf(id);
+      if (idx > 0) {
+        [routeState.stopIds[idx - 1], routeState.stopIds[idx]] = [routeState.stopIds[idx], routeState.stopIds[idx - 1]];
+        saveRoute();
+      }
+    });
+  });
+  listEl.querySelectorAll(".rs-down").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.down;
+      const idx = routeState.stopIds.indexOf(id);
+      if (idx !== -1 && idx < routeState.stopIds.length - 1) {
+        [routeState.stopIds[idx], routeState.stopIds[idx + 1]] = [routeState.stopIds[idx + 1], routeState.stopIds[idx]];
+        saveRoute();
+      }
     });
   });
 

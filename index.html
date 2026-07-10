@@ -97,6 +97,18 @@
   @media (prefers-color-scheme: dark) { .popup-box .roi-gewinn { color: #ef7a44; } }
   .popup-box .roi-vorbild { margin-top: 5px; padding-top: 5px; border-top: 1px dashed rgba(0,0,0,.15); }
   @media (prefers-color-scheme: dark) { .popup-box .roi-vorbild { border-top-color: rgba(255,255,255,.15); } }
+  .route-toggle-btn {
+    width: 100%; font-size: 12px; padding: 7px; border-radius: 6px; border: none; cursor: pointer;
+    background: #2563eb; color: #fff; font-weight: 600;
+  }
+  .route-toggle-btn.in-route { background: #ef7a44; color: #0f1c28; }
+  .route-num-badge {
+    background: #ef7a44; color: #0f1c28; border-radius: 50%; width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.5); border: 2px solid #fff;
+  }
+  .route-badge-tooltip { background: transparent; border: none; box-shadow: none; padding: 0; }
+  .route-badge-tooltip::before { display: none; }
 
   /* --- Branchen-Referenz tab --- */
   #view-branchen { flex: 1; display: none; min-height: 0; overflow: hidden; flex-direction: column; background: #eef1f3; }
@@ -288,7 +300,7 @@
 <script>
 // ---------- Password gate = real Firebase Auth (server-verified, not bypassable via devtools) ----------
 const UNLOCK_KEY = "kaltakquise_unlocked_v1";
-const FIREBASE_LOGIN_EMAIL = "stefan@bodi-media.com"; // matching Firebase Auth user, see setup instructions
+const FIREBASE_LOGIN_EMAIL = "k36@karlcrm.app"; // matching Firebase Auth user (Platzhalter, keine echte Mail)
 
 let fbReady = false;
 let fbDb = null;
@@ -337,10 +349,11 @@ function attachFirebaseListeners() {
   fbDb.ref("route").on("value", snapshot => {
     const remote = snapshot.val();
     if (remote) {
-      routeState = remote;
-      if (remote.start) document.getElementById("route-start").value = remote.start;
+      routeState = { start: remote.start || routeState.start, stopIds: remote.stopIds || [] };
+      document.getElementById("route-start").value = routeState.start;
     }
     renderRoute();
+    refreshRouteBadges();
   });
 }
 
@@ -599,8 +612,17 @@ function popupHtml(item) {
         <textarea class="note-field" placeholder="Notiz...">${escapeHtml(st.notiz)}</textarea>
         <button class="save-note">Speichern</button>
       </div>
+      <div class="row">${routeButtonHtml(item.id)}</div>
     </div>
   `;
+}
+
+function routeButtonHtml(id) {
+  const idx = routeState.stopIds.indexOf(id);
+  if (idx === -1) {
+    return `<button class="route-toggle-btn" data-route-toggle="${id}">🚗 Zur Route hinzufügen</button>`;
+  }
+  return `<button class="route-toggle-btn in-route" data-route-toggle="${id}">✓ Route-Station ${idx + 1} — entfernen</button>`;
 }
 
 function colorFor(item) {
@@ -635,6 +657,26 @@ function buildMarkers() {
     markerById[item.id] = marker;
   });
   document.getElementById("stats").textContent = `${filtered.length} / ${DATA.length} Leads sichtbar`;
+  refreshRouteBadges();
+}
+
+function refreshRouteBadges() {
+  Object.entries(markerById).forEach(([id, marker]) => {
+    if (marker.getTooltip()) marker.unbindTooltip();
+    const idx = routeState.stopIds.indexOf(id);
+    if (idx !== -1) {
+      marker.bindTooltip(`<div class="route-num-badge">${idx + 1}</div>`, {
+        permanent: true, direction: "top", offset: [0, -6], className: "route-badge-tooltip", opacity: 1,
+      });
+    }
+  });
+}
+
+function toggleRouteStop(id) {
+  const idx = routeState.stopIds.indexOf(id);
+  if (idx === -1) routeState.stopIds.push(id);
+  else routeState.stopIds.splice(idx, 1);
+  saveRoute();
 }
 
 function wirePopup(popup, item) {
@@ -657,6 +699,14 @@ function wirePopup(popup, item) {
     saveBtn.textContent = "Gespeichert ✓";
     setTimeout(() => saveBtn.textContent = "Speichern", 1200);
   });
+  const routeBtn = el.querySelector(".route-toggle-btn");
+  if (routeBtn) {
+    routeBtn.addEventListener("click", () => {
+      toggleRouteStop(item.id);
+      popup.setContent(popupHtml(item));
+      wirePopup(popup, item);
+    });
+  }
 }
 
 function currentFilter(id) {
@@ -980,6 +1030,7 @@ function renderRoute() {
 
 function saveRoute() {
   renderRoute();
+  refreshRouteBadges();
   fbWriteRoute();
 }
 

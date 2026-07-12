@@ -135,11 +135,10 @@
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 1px 3px rgba(0,0,0,.6); border: 1.5px solid #fff;
   }
-  .badge-row { display: flex; gap: 2px; }
-  .muster-icon-badge {
-    width: 17px; height: 17px; border-radius: 50%; background: #f59e0b; font-size: 10px;
+  .muster-crown-badge {
+    width: 16px; height: 16px; font-size: 15px; line-height: 1;
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 1px 3px rgba(0,0,0,.6); border: 1.5px solid #fff;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.7));
   }
   .route-badge-tooltip { background: transparent; border: none; box-shadow: none; padding: 0; }
   .route-badge-tooltip::before { display: none; }
@@ -680,7 +679,7 @@ legend.onAdd = function () {
     bodyHtml += `<label class="legend-cat-row"><input type="checkbox" class="legend-cat-cb" data-cat="${escapeHtml(cat)}" checked>` +
       `<span class="dot" style="background:${color}"></span>${escapeHtml(cat)}</label>`;
   });
-  bodyHtml += `<hr style='margin:4px 0'><label class="legend-cat-row"><input type="checkbox" id="f-muster-only"> 🏆 Nur Musterkonkurrenten (der ausgewählten Branchen) zeigen</label>`;
+  bodyHtml += `<hr style='margin:4px 0'><label class="legend-cat-row"><input type="checkbox" id="f-muster-only"> 👑 Nur Musterkonkurrenten (der ausgewählten Branchen) zeigen</label>`;
   div.innerHTML = `
     <div class="legend-head"><span>Legende / Kategorien</span><span class="legend-arrow">▾</span></div>
     <div class="legend-body">${bodyHtml}</div>
@@ -769,7 +768,7 @@ function popupHtml(item) {
       ${item.marketing ? `<div class="row marketing">${marketingHtml(item.marketing)}</div>` : ""}
       ${item.notizen ? `<div class="row"><b>Hinweis:</b> ${escapeHtml(item.notizen)}</div>` : ""}
       <div class="row"><b>Status:</b> ${statusSelectHtml(item.id, "status-select-popup")}</div>
-      <div class="row"><label><input type="checkbox" class="muster-cb" ${getEntry(item.id).musterkonkurrent ? "checked" : ""}> 🏆 Musterkonkurrent (gutes Marketing/Website)</label></div>
+      <div class="row"><label><input type="checkbox" class="muster-cb" ${getEntry(item.id).musterkonkurrent ? "checked" : ""}> 👑 Musterkonkurrent (gutes Marketing/Website)</label></div>
       <div class="row">
         <textarea class="note-field" placeholder="Notiz...">${escapeHtml(st.notiz)}</textarea>
         <button class="save-note">Speichern</button>
@@ -812,22 +811,39 @@ function updateStatusIcon(item) {
   if (!item.lat || !item.lng) return;
   const st = getEntry(item.id);
   const iconInfo = statusIconFor(st.status);
-  const parts = [];
-  if (iconInfo) parts.push(`<div class="status-icon-badge" style="background:${iconInfo.bg}">${iconInfo.symbol}</div>`);
-  if (st.musterkonkurrent) parts.push(`<div class="muster-icon-badge" title="Musterkonkurrent">🏆</div>`);
-  if (!parts.length) return;
+  if (!iconInfo) return;
   const icon = L.divIcon({
-    html: `<div class="badge-row">${parts.join("")}</div>`,
-    className: "", iconSize: [17 * parts.length + 2, 17], iconAnchor: [8, 8],
+    html: `<div class="status-icon-badge" style="background:${iconInfo.bg}">${iconInfo.symbol}</div>`,
+    className: "", iconSize: [17, 17], iconAnchor: [8, 8],
   });
   const m = L.marker([item.lat, item.lng], { icon, interactive: false, zIndexOffset: 1000 });
   m.addTo(markersLayer);
   statusIconMarkers[item.id] = m;
 }
 
+let musterCrownMarkers = {};
+function updateMusterCrown(item) {
+  if (musterCrownMarkers[item.id]) {
+    markersLayer.removeLayer(musterCrownMarkers[item.id]);
+    delete musterCrownMarkers[item.id];
+  }
+  if (!item.lat || !item.lng) return;
+  const st = getEntry(item.id);
+  if (!st.musterkonkurrent) return;
+  const radius = item.ab === "A" ? 9 : 6;
+  const icon = L.divIcon({
+    html: `<div class="muster-crown-badge" title="Musterkonkurrent">👑</div>`,
+    className: "", iconSize: [16, 16], iconAnchor: [8, 8 + radius],
+  });
+  const m = L.marker([item.lat, item.lng], { icon, interactive: false, zIndexOffset: 1001 });
+  m.addTo(markersLayer);
+  musterCrownMarkers[item.id] = m;
+}
+
 function buildMarkers() {
   markersLayer.clearLayers();
   statusIconMarkers = {};
+  musterCrownMarkers = {};
   const filtered = applyFilters(DATA);
   let skippedNoCoords = 0;
   filtered.forEach(item => {
@@ -851,6 +867,7 @@ function buildMarkers() {
     marker.addTo(markersLayer);
     markerById[item.id] = marker;
     updateStatusIcon(item);
+    updateMusterCrown(item);
   });
   const shownCount = filtered.length - skippedNoCoords;
   document.getElementById("stats").textContent = skippedNoCoords
@@ -939,7 +956,7 @@ function wirePopup(popup, item) {
       st.musterkonkurrent = musterCb.checked;
       saveState(state);
       fbWriteLeadState(item.id, st);
-      updateStatusIcon(item);
+      updateMusterCrown(item);
       if (document.getElementById("f-muster-only").checked) buildMarkers();
     });
   }

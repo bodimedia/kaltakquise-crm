@@ -135,6 +135,12 @@
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 1px 3px rgba(0,0,0,.6); border: 1.5px solid #fff;
   }
+  .badge-row { display: flex; gap: 2px; }
+  .muster-icon-badge {
+    width: 17px; height: 17px; border-radius: 50%; background: #f59e0b; font-size: 10px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,.6); border: 1.5px solid #fff;
+  }
   .route-badge-tooltip { background: transparent; border: none; box-shadow: none; padding: 0; }
   .route-badge-tooltip::before { display: none; }
 
@@ -468,6 +474,7 @@ function fbWriteLeadState(id, entry) {
     status: entry.status || "offen",
     notiz: entry.notiz || "",
     website_override: entry.website_override || "",
+    musterkonkurrent: !!entry.musterkonkurrent,
   });
 }
 function fbWriteRoute() {
@@ -551,9 +558,10 @@ function saveState(state) {
 let state = loadState();
 
 function getEntry(id) {
-  if (!state[id]) state[id] = { status: "offen", notiz: "", website_override: "" };
+  if (!state[id]) state[id] = { status: "offen", notiz: "", website_override: "", musterkonkurrent: false };
   if (state[id].status === undefined) state[id].status = state[id].besucht ? "besucht_kein_interesse" : "offen";
   if (state[id].website_override === undefined) state[id].website_override = "";
+  if (state[id].musterkonkurrent === undefined) state[id].musterkonkurrent = false;
   return state[id];
 }
 function effectiveWebsite(item) {
@@ -672,6 +680,7 @@ legend.onAdd = function () {
     bodyHtml += `<label class="legend-cat-row"><input type="checkbox" class="legend-cat-cb" data-cat="${escapeHtml(cat)}" checked>` +
       `<span class="dot" style="background:${color}"></span>${escapeHtml(cat)}</label>`;
   });
+  bodyHtml += `<hr style='margin:4px 0'><label class="legend-cat-row"><input type="checkbox" id="f-muster-only"> 🏆 Nur Musterkonkurrenten (der ausgewählten Branchen) zeigen</label>`;
   div.innerHTML = `
     <div class="legend-head"><span>Legende / Kategorien</span><span class="legend-arrow">▾</span></div>
     <div class="legend-body">${bodyHtml}</div>
@@ -696,6 +705,7 @@ legend.onAdd = function () {
     div.querySelectorAll(".legend-cat-cb").forEach(cb => { cb.checked = false; hiddenCategories.add(cb.dataset.cat); });
     buildMarkers();
   });
+  div.querySelector("#f-muster-only").addEventListener("change", () => buildMarkers());
   L.DomEvent.disableClickPropagation(div);
   return div;
 };
@@ -759,6 +769,7 @@ function popupHtml(item) {
       ${item.marketing ? `<div class="row marketing">${marketingHtml(item.marketing)}</div>` : ""}
       ${item.notizen ? `<div class="row"><b>Hinweis:</b> ${escapeHtml(item.notizen)}</div>` : ""}
       <div class="row"><b>Status:</b> ${statusSelectHtml(item.id, "status-select-popup")}</div>
+      <div class="row"><label><input type="checkbox" class="muster-cb" ${getEntry(item.id).musterkonkurrent ? "checked" : ""}> 🏆 Musterkonkurrent (gutes Marketing/Website)</label></div>
       <div class="row">
         <textarea class="note-field" placeholder="Notiz...">${escapeHtml(st.notiz)}</textarea>
         <button class="save-note">Speichern</button>
@@ -801,10 +812,13 @@ function updateStatusIcon(item) {
   if (!item.lat || !item.lng) return;
   const st = getEntry(item.id);
   const iconInfo = statusIconFor(st.status);
-  if (!iconInfo) return;
+  const parts = [];
+  if (iconInfo) parts.push(`<div class="status-icon-badge" style="background:${iconInfo.bg}">${iconInfo.symbol}</div>`);
+  if (st.musterkonkurrent) parts.push(`<div class="muster-icon-badge" title="Musterkonkurrent">🏆</div>`);
+  if (!parts.length) return;
   const icon = L.divIcon({
-    html: `<div class="status-icon-badge" style="background:${iconInfo.bg}">${iconInfo.symbol}</div>`,
-    className: "", iconSize: [17, 17], iconAnchor: [8, 8],
+    html: `<div class="badge-row">${parts.join("")}</div>`,
+    className: "", iconSize: [17 * parts.length + 2, 17], iconAnchor: [8, 8],
   });
   const m = L.marker([item.lat, item.lng], { icon, interactive: false, zIndexOffset: 1000 });
   m.addTo(markersLayer);
@@ -918,6 +932,17 @@ function wirePopup(popup, item) {
       wirePopup(popup, item);
     });
   }
+  const musterCb = el.querySelector(".muster-cb");
+  if (musterCb) {
+    musterCb.addEventListener("change", () => {
+      const st = getEntry(item.id);
+      st.musterkonkurrent = musterCb.checked;
+      saveState(state);
+      fbWriteLeadState(item.id, st);
+      updateStatusIcon(item);
+      if (document.getElementById("f-muster-only").checked) buildMarkers();
+    });
+  }
 }
 
 function currentFilter(id) {
@@ -936,6 +961,8 @@ function applyFilters(data) {
     if (gebiet && item.gebiet !== gebiet) return false;
     if (kategorie && item.kategorie !== kategorie) return false;
     if (hiddenCategories.has(item.kategorie)) return false;
+    const musterOnlyEl = document.getElementById("f-muster-only");
+    if (musterOnlyEl && musterOnlyEl.checked && !getEntry(item.id).musterkonkurrent) return false;
     if (b2c && item.b2c_b2b !== b2c) return false;
     if (ab && item.ab !== ab) return false;
     if (status && getEntry(item.id).status !== status) return false;

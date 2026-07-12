@@ -486,6 +486,30 @@ const CATEGORY_COLORS = {
   "Einrichtungsstudio/Möbel": "#8b5cf6",
   "Smart Home": "#14b8a6",
   "Poolbau": "#0891b2",
+  "Abbruch/Erdbau": "#78350f",
+  "Pflasterer/Steinmetz": "#713f12",
+  "Kaminbau/Rauchfangkehrer": "#e11d48",
+  "Bauwerksabdichtung/Kellersanierung": "#155e75",
+  "Schlosserei/Metallbau": "#6d28d9",
+  "Bodenleger/Parkett": "#a16207",
+  "Alarmanlagen/Sicherheitstechnik": "#1e3a8a",
+  "Brunnenbau/Wasseraufbereitung": "#1d4ed8",
+  "Kanal-/Rohrsanierung": "#365314",
+  "Baumpflege/Baumschnitt": "#15803d",
+  "Gerüstbau": "#f97316",
+  "Glaserei/Glasbau": "#38bdf8",
+  "Fertighaus/Holzbau": "#7c2d12",
+  "Carport/Überdachung": "#fb7185",
+  "Schimmelsanierung/Brandschadensanierung": "#991b1b",
+  "Blitzschutztechnik": "#fbbf24",
+  "Estrich/Betonbau": "#52525b",
+  "Ofenbau/Kachelöfen": "#c2410c",
+  "Treppenbau": "#854d0e",
+  "E-Ladestationen/Wallbox": "#059669",
+  "Teich-/Biotopbau": "#0e7490",
+  "Sonnenschutz innen (Plissees/Jalousien)": "#bef264",
+  "Betonbohren/Betonschneiden": "#4c1d95",
+  "Saunabau/Wellness": "#f43f5e",
 };
 const DEFAULT_COLOR = "#6b7280";
 
@@ -636,23 +660,10 @@ legend.onAdd = function () {
     div.classList.toggle("collapsed");
     L.DomEvent.stopPropagation(e);
   });
-  const allCats = Object.keys(CATEGORY_COLORS);
   div.querySelectorAll(".legend-cat-cb").forEach(cb => {
-    cb.addEventListener("click", (e) => {
-      e.preventDefault();
-      const cat = cb.dataset.cat;
-      const isolating = !(hiddenCategories.size === allCats.length - 1 && !hiddenCategories.has(cat));
-      if (isolating) {
-        // Klick auf eine Kategorie: nur diese anzeigen, alle anderen abwählen
-        allCats.forEach(c => hiddenCategories.add(c));
-        hiddenCategories.delete(cat);
-      } else {
-        // war schon isoliert auf genau diese -> zurück zu "alle anzeigen"
-        hiddenCategories.clear();
-      }
-      div.querySelectorAll(".legend-cat-cb").forEach(other => {
-        other.checked = !hiddenCategories.has(other.dataset.cat);
-      });
+    cb.addEventListener("change", () => {
+      if (cb.checked) hiddenCategories.delete(cb.dataset.cat);
+      else hiddenCategories.add(cb.dataset.cat);
       buildMarkers();
     });
   });

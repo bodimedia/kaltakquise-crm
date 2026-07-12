@@ -728,6 +728,7 @@ legend.onAdd = function () {
   div.querySelector("#f-traum-only").addEventListener("change", () => buildMarkers());
   div.querySelector("#f-hide-nicht-relevant").addEventListener("change", () => buildMarkers());
   L.DomEvent.disableClickPropagation(div);
+  L.DomEvent.disableScrollPropagation(div);
   return div;
 };
 legend.addTo(map);

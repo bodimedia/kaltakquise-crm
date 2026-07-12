@@ -673,6 +673,7 @@ function popupHtml(item) {
       ${item.gf ? `<div class="row">GF/Inh.: ${escapeHtml(item.gf)}</div>` : ""}
       <div class="row">Tel: ${telHref}</div>
       <div class="row">Web: ${websiteHtml(item.website)}</div>
+      ${item.fb_ads_link ? `<div class="row">📘 <a href="${escapeHtml(item.fb_ads_link)}" target="_blank" rel="noopener">Facebook Ads Library</a></div>` : ""}
       ${item.email ? `<div class="row">E-Mail: <a href="mailto:${escapeHtml(item.email)}">${escapeHtml(item.email)}</a></div>` : ""}
       ${item.beschreibung ? `<div class="row">${escapeHtml(item.beschreibung)}</div>` : ""}
       ${item.oeffnungszeiten ? `<div class="row">Öffnungszeiten: ${escapeHtml(item.oeffnungszeiten)}</div>` : ""}
@@ -958,7 +959,7 @@ document.getElementById("btn-export-json").addEventListener("click", () => {
 
 document.getElementById("btn-export-csv").addEventListener("click", () => {
   const rows = currentExportData();
-  const cols = ["name","rechtsform","ab","kategorie","b2c_b2b","gf","adresse","gebiet","telefon","website","email","oeffnungszeiten","beschreibung","roi","marketing","status_label","notiz_lokal"];
+  const cols = ["name","rechtsform","ab","kategorie","b2c_b2b","gf","adresse","gebiet","telefon","website","email","oeffnungszeiten","beschreibung","roi","fb_page","fb_ads_link","marketing","status_label","notiz_lokal"];
   const csvEscape = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = [cols.join(",")];
   rows.forEach(r => lines.push(cols.map(c => csvEscape(r[c])).join(",")));

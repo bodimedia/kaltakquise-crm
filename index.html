@@ -682,7 +682,8 @@ legend.onAdd = function () {
       `<span class="dot" style="background:${color}"></span>${escapeHtml(cat)}</label>`;
   });
   bodyHtml += `<hr style='margin:4px 0'><label class="legend-cat-row"><input type="checkbox" id="f-muster-only"> 👑 Nur Musterkonkurrenten (der ausgewählten Branchen) zeigen</label>` +
-    `<label class="legend-cat-row"><input type="checkbox" id="f-traum-only"> 🚀 Nur Traumkunden (der ausgewählten Branchen) zeigen</label>`;
+    `<label class="legend-cat-row"><input type="checkbox" id="f-traum-only"> 🚀 Nur Traumkunden (der ausgewählten Branchen) zeigen</label>` +
+    `<label class="legend-cat-row"><input type="checkbox" id="f-hide-nicht-relevant"> ✕ Nicht relevante ausblenden</label>`;
   div.innerHTML = `
     <div class="legend-head"><span>Legende / Kategorien</span><span class="legend-arrow">▾</span></div>
     <div class="legend-body">${bodyHtml}</div>
@@ -709,6 +710,7 @@ legend.onAdd = function () {
   });
   div.querySelector("#f-muster-only").addEventListener("change", () => buildMarkers());
   div.querySelector("#f-traum-only").addEventListener("change", () => buildMarkers());
+  div.querySelector("#f-hide-nicht-relevant").addEventListener("change", () => buildMarkers());
   L.DomEvent.disableClickPropagation(div);
   return div;
 };
@@ -921,7 +923,8 @@ function wirePopup(popup, item) {
     const marker = markerById[item.id];
     if (marker) marker.setStyle({ fillColor: colorFor(item) });
     updateStatusIcon(item);
-    if (currentFilter("f-status")) buildMarkers();
+    const hideNichtRelevantEl = document.getElementById("f-hide-nicht-relevant");
+    if (currentFilter("f-status") || (hideNichtRelevantEl && hideNichtRelevantEl.checked)) buildMarkers();
   });
   saveBtn.addEventListener("click", () => {
     const st = getEntry(item.id);
@@ -1009,6 +1012,8 @@ function applyFilters(data) {
     if (musterOnlyEl && musterOnlyEl.checked && !getEntry(item.id).musterkonkurrent) return false;
     const traumOnlyEl = document.getElementById("f-traum-only");
     if (traumOnlyEl && traumOnlyEl.checked && !getEntry(item.id).traumkunde) return false;
+    const hideNichtRelevantEl = document.getElementById("f-hide-nicht-relevant");
+    if (hideNichtRelevantEl && hideNichtRelevantEl.checked && getEntry(item.id).status === "nicht_relevant") return false;
     if (b2c && item.b2c_b2b !== b2c) return false;
     if (ab && item.ab !== ab) return false;
     if (status && getEntry(item.id).status !== status) return false;

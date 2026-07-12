@@ -135,7 +135,7 @@
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 1px 3px rgba(0,0,0,.6); border: 1.5px solid #fff;
   }
-  .muster-crown-badge {
+  .muster-crown-badge, .traumkunde-badge {
     width: 16px; height: 16px; font-size: 15px; line-height: 1;
     display: flex; align-items: center; justify-content: center;
     filter: drop-shadow(0 1px 2px rgba(0,0,0,.7));
@@ -474,6 +474,7 @@ function fbWriteLeadState(id, entry) {
     notiz: entry.notiz || "",
     website_override: entry.website_override || "",
     musterkonkurrent: !!entry.musterkonkurrent,
+    traumkunde: !!entry.traumkunde,
   });
 }
 function fbWriteRoute() {
@@ -557,10 +558,11 @@ function saveState(state) {
 let state = loadState();
 
 function getEntry(id) {
-  if (!state[id]) state[id] = { status: "offen", notiz: "", website_override: "", musterkonkurrent: false };
+  if (!state[id]) state[id] = { status: "offen", notiz: "", website_override: "", musterkonkurrent: false, traumkunde: false };
   if (state[id].status === undefined) state[id].status = state[id].besucht ? "besucht_kein_interesse" : "offen";
   if (state[id].website_override === undefined) state[id].website_override = "";
   if (state[id].musterkonkurrent === undefined) state[id].musterkonkurrent = false;
+  if (state[id].traumkunde === undefined) state[id].traumkunde = false;
   return state[id];
 }
 function effectiveWebsite(item) {
@@ -679,7 +681,8 @@ legend.onAdd = function () {
     bodyHtml += `<label class="legend-cat-row"><input type="checkbox" class="legend-cat-cb" data-cat="${escapeHtml(cat)}" checked>` +
       `<span class="dot" style="background:${color}"></span>${escapeHtml(cat)}</label>`;
   });
-  bodyHtml += `<hr style='margin:4px 0'><label class="legend-cat-row"><input type="checkbox" id="f-muster-only"> 👑 Nur Musterkonkurrenten (der ausgewählten Branchen) zeigen</label>`;
+  bodyHtml += `<hr style='margin:4px 0'><label class="legend-cat-row"><input type="checkbox" id="f-muster-only"> 👑 Nur Musterkonkurrenten (der ausgewählten Branchen) zeigen</label>` +
+    `<label class="legend-cat-row"><input type="checkbox" id="f-traum-only"> 🚀 Nur Traumkunden (der ausgewählten Branchen) zeigen</label>`;
   div.innerHTML = `
     <div class="legend-head"><span>Legende / Kategorien</span><span class="legend-arrow">▾</span></div>
     <div class="legend-body">${bodyHtml}</div>
@@ -705,6 +708,7 @@ legend.onAdd = function () {
     buildMarkers();
   });
   div.querySelector("#f-muster-only").addEventListener("change", () => buildMarkers());
+  div.querySelector("#f-traum-only").addEventListener("change", () => buildMarkers());
   L.DomEvent.disableClickPropagation(div);
   return div;
 };
@@ -769,6 +773,7 @@ function popupHtml(item) {
       ${item.notizen ? `<div class="row"><b>Hinweis:</b> ${escapeHtml(item.notizen)}</div>` : ""}
       <div class="row"><b>Status:</b> ${statusSelectHtml(item.id, "status-select-popup")}</div>
       <div class="row"><label><input type="checkbox" class="muster-cb" ${getEntry(item.id).musterkonkurrent ? "checked" : ""}> 👑 Musterkonkurrent (gutes Marketing/Website)</label></div>
+      <div class="row"><label><input type="checkbox" class="traum-cb" ${getEntry(item.id).traumkunde ? "checked" : ""}> 🚀 Traumkunde</label></div>
       <div class="row">
         <textarea class="note-field" placeholder="Notiz...">${escapeHtml(st.notiz)}</textarea>
         <button class="save-note">Speichern</button>
@@ -821,29 +826,39 @@ function updateStatusIcon(item) {
   statusIconMarkers[item.id] = m;
 }
 
-let musterCrownMarkers = {};
-function updateMusterCrown(item) {
-  if (musterCrownMarkers[item.id]) {
-    markersLayer.removeLayer(musterCrownMarkers[item.id]);
-    delete musterCrownMarkers[item.id];
+let topBadgeMarkers = {};
+function updateTopBadges(item) {
+  if (topBadgeMarkers[item.id]) {
+    topBadgeMarkers[item.id].forEach(m => markersLayer.removeLayer(m));
+    delete topBadgeMarkers[item.id];
   }
   if (!item.lat || !item.lng) return;
   const st = getEntry(item.id);
-  if (!st.musterkonkurrent) return;
+  const badges = [];
+  if (st.musterkonkurrent) badges.push({ emoji: "👑", cls: "muster-crown-badge", title: "Musterkonkurrent" });
+  if (st.traumkunde) badges.push({ emoji: "🚀", cls: "traumkunde-badge", title: "Traumkunde" });
+  if (!badges.length) return;
   const radius = item.ab === "A" ? 9 : 6;
-  const icon = L.divIcon({
-    html: `<div class="muster-crown-badge" title="Musterkonkurrent">👑</div>`,
-    className: "", iconSize: [16, 16], iconAnchor: [8, 8 + radius],
+  const spacing = 15;
+  const markers = [];
+  badges.forEach((b, i) => {
+    const desiredOffset = (i - (badges.length - 1) / 2) * spacing;
+    const anchorX = 8 - desiredOffset;
+    const icon = L.divIcon({
+      html: `<div class="${b.cls}" title="${b.title}">${b.emoji}</div>`,
+      className: "", iconSize: [16, 16], iconAnchor: [anchorX, 8 + radius],
+    });
+    const m = L.marker([item.lat, item.lng], { icon, interactive: false, zIndexOffset: 1001 });
+    m.addTo(markersLayer);
+    markers.push(m);
   });
-  const m = L.marker([item.lat, item.lng], { icon, interactive: false, zIndexOffset: 1001 });
-  m.addTo(markersLayer);
-  musterCrownMarkers[item.id] = m;
+  topBadgeMarkers[item.id] = markers;
 }
 
 function buildMarkers() {
   markersLayer.clearLayers();
   statusIconMarkers = {};
-  musterCrownMarkers = {};
+  topBadgeMarkers = {};
   const filtered = applyFilters(DATA);
   let skippedNoCoords = 0;
   filtered.forEach(item => {
@@ -867,7 +882,7 @@ function buildMarkers() {
     marker.addTo(markersLayer);
     markerById[item.id] = marker;
     updateStatusIcon(item);
-    updateMusterCrown(item);
+    updateTopBadges(item);
   });
   const shownCount = filtered.length - skippedNoCoords;
   document.getElementById("stats").textContent = skippedNoCoords
@@ -956,8 +971,20 @@ function wirePopup(popup, item) {
       st.musterkonkurrent = musterCb.checked;
       saveState(state);
       fbWriteLeadState(item.id, st);
-      updateMusterCrown(item);
+      updateTopBadges(item);
       if (document.getElementById("f-muster-only").checked) buildMarkers();
+    });
+  }
+  const traumCb = el.querySelector(".traum-cb");
+  if (traumCb) {
+    traumCb.addEventListener("change", () => {
+      const st = getEntry(item.id);
+      st.traumkunde = traumCb.checked;
+      saveState(state);
+      fbWriteLeadState(item.id, st);
+      updateTopBadges(item);
+      const traumOnlyEl = document.getElementById("f-traum-only");
+      if (traumOnlyEl && traumOnlyEl.checked) buildMarkers();
     });
   }
 }
@@ -980,6 +1007,8 @@ function applyFilters(data) {
     if (hiddenCategories.has(item.kategorie)) return false;
     const musterOnlyEl = document.getElementById("f-muster-only");
     if (musterOnlyEl && musterOnlyEl.checked && !getEntry(item.id).musterkonkurrent) return false;
+    const traumOnlyEl = document.getElementById("f-traum-only");
+    if (traumOnlyEl && traumOnlyEl.checked && !getEntry(item.id).traumkunde) return false;
     if (b2c && item.b2c_b2b !== b2c) return false;
     if (ab && item.ab !== ab) return false;
     if (status && getEntry(item.id).status !== status) return false;

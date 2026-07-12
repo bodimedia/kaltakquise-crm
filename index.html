@@ -94,6 +94,16 @@
   .badge.B { background: #ddd; color: #333; }
   .popup-box .row { margin: 3px 0; }
   .popup-box a { color: #2563eb; }
+  .popup-box .edit-website-btn {
+    background: none; border: none; cursor: pointer; font-size: 12px; padding: 0 3px; vertical-align: middle;
+  }
+  .popup-box .website-edit-box { display: inline-flex; gap: 4px; margin-top: 4px; width: 100%; }
+  .popup-box .website-edit-input {
+    flex: 1; font-size: 12px; padding: 4px 6px; border-radius: 4px; border: 1px solid #ccc; min-width: 0;
+  }
+  .popup-box .website-save-btn {
+    font-size: 11px; padding: 4px 8px; border-radius: 4px; border: none; background: #2563eb; color: #fff; cursor: pointer; white-space: nowrap;
+  }
   .popup-box textarea {
     width: 100%; font-size: 12px; padding: 4px; border-radius: 4px; border: 1px solid #ccc;
     resize: vertical; min-height: 40px; font-family: inherit;
@@ -454,7 +464,11 @@ function refreshCurrentView() {
 
 function fbWriteLeadState(id, entry) {
   if (!fbReady || !fbDb) return;
-  fbDb.ref("leads_state/" + id).set({ status: entry.status || "offen", notiz: entry.notiz || "" });
+  fbDb.ref("leads_state/" + id).set({
+    status: entry.status || "offen",
+    notiz: entry.notiz || "",
+    website_override: entry.website_override || "",
+  });
 }
 function fbWriteRoute() {
   if (!fbReady || !fbDb) return;
@@ -537,9 +551,15 @@ function saveState(state) {
 let state = loadState();
 
 function getEntry(id) {
-  if (!state[id]) state[id] = { status: "offen", notiz: "" };
+  if (!state[id]) state[id] = { status: "offen", notiz: "", website_override: "" };
   if (state[id].status === undefined) state[id].status = state[id].besucht ? "besucht_kein_interesse" : "offen";
+  if (state[id].website_override === undefined) state[id].website_override = "";
   return state[id];
+}
+function effectiveWebsite(item) {
+  const st = getEntry(item.id);
+  if (st.website_override) return "ja: " + st.website_override;
+  return item.website;
 }
 function setStatus(id, value) {
   const st = getEntry(id);
@@ -723,7 +743,14 @@ function popupHtml(item) {
       <div class="row">${escapeHtml(item.adresse)} <i>(${escapeHtml(item.gebiet)})</i></div>
       ${item.gf ? `<div class="row">GF/Inh.: ${escapeHtml(item.gf)}</div>` : ""}
       <div class="row">Tel: ${telHref}</div>
-      <div class="row">Web: ${websiteHtml(item.website)}</div>
+      <div class="row website-row" data-id="${item.id}">
+        <span class="website-display">Web: ${websiteHtml(effectiveWebsite(item))}</span>
+        <button class="edit-website-btn" title="Website bearbeiten">✏️</button>
+        <span class="website-edit-box" style="display:none;">
+          <input type="url" class="website-edit-input" placeholder="https://..." value="${escapeHtml(getEntry(item.id).website_override || "")}">
+          <button class="website-save-btn">Speichern</button>
+        </span>
+      </div>
       ${item.fb_ads_link ? `<div class="row">📘 <a href="${escapeHtml(item.fb_ads_link)}" target="_blank" rel="noopener">Facebook Ads Library</a></div>` : ""}
       ${item.email ? `<div class="row">E-Mail: <a href="mailto:${escapeHtml(item.email)}">${escapeHtml(item.email)}</a></div>` : ""}
       ${item.beschreibung ? `<div class="row">${escapeHtml(item.beschreibung)}</div>` : ""}
@@ -862,6 +889,31 @@ function wirePopup(popup, item) {
   if (routeBtn) {
     routeBtn.addEventListener("click", () => {
       toggleRouteStop(item.id);
+      popup.setContent(popupHtml(item));
+      wirePopup(popup, item);
+    });
+  }
+  const editWebsiteBtn = el.querySelector(".edit-website-btn");
+  const websiteEditBox = el.querySelector(".website-edit-box");
+  const websiteDisplay = el.querySelector(".website-display");
+  if (editWebsiteBtn) {
+    editWebsiteBtn.addEventListener("click", () => {
+      const showing = websiteEditBox.style.display !== "none";
+      websiteEditBox.style.display = showing ? "none" : "inline-flex";
+      websiteDisplay.style.display = showing ? "inline" : "none";
+      if (!showing) el.querySelector(".website-edit-input").focus();
+    });
+  }
+  const websiteSaveBtn = el.querySelector(".website-save-btn");
+  if (websiteSaveBtn) {
+    websiteSaveBtn.addEventListener("click", () => {
+      const input = el.querySelector(".website-edit-input");
+      let url = input.value.trim();
+      if (url && !/^https?:\/\//i.test(url)) url = "https://" + url;
+      const st = getEntry(item.id);
+      st.website_override = url;
+      saveState(state);
+      fbWriteLeadState(item.id, st);
       popup.setContent(popupHtml(item));
       wirePopup(popup, item);
     });

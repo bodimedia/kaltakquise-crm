@@ -71,6 +71,13 @@
   @media (prefers-color-scheme: dark) { .legend { background: rgba(30,33,38,.95); color: #eee; } }
   .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
   .legend .a-ring { display:inline-block; width:10px; height:10px; border-radius:50%; border:2px solid gold; vertical-align:middle; margin-right:5px; }
+  .legend-cat-controls { display: flex; gap: 6px; margin: 4px 0 6px; }
+  .legend-cat-controls button {
+    font-size: 10px; padding: 3px 8px; border-radius: 10px; border: none; background: #2563eb; color: #fff; cursor: pointer;
+  }
+  .legend-cat-controls button:hover { background: #1d4ed8; }
+  .legend-cat-row { display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 1px 0; }
+  .legend-cat-row input { margin: 0; cursor: pointer; }
   .legend-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; font-weight: 700; }
   .legend-arrow { transition: transform .15s; }
   .legend.collapsed .legend-arrow { transform: rotate(-90deg); }
@@ -605,6 +612,8 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 }).addTo(map);
 
 const legend = L.control({ position: "bottomleft" });
+const hiddenCategories = new Set();
+
 legend.onAdd = function () {
   const div = L.DomUtil.create("div", "legend");
   const startCollapsed = window.innerWidth <= 640;
@@ -613,17 +622,48 @@ legend.onAdd = function () {
     "<b>✓ grün:</b> schon besucht<br>" +
     "<b>! blau:</b> besucht, GF war nicht da (nochmal hin)<br>" +
     "<b>✕ rot:</b> nicht relevant<br>" +
-    "<b>Grau/blass:</b> abgeschlossen (kein Interesse/abgelehnt)<hr style='margin:4px 0'>";
+    "<b>Grau/blass:</b> abgeschlossen (kein Interesse/abgelehnt)<hr style='margin:4px 0'>" +
+    "<div class='legend-cat-controls'><button class='legend-cat-all'>Alle</button><button class='legend-cat-none'>Keine</button></div>";
   Object.entries(CATEGORY_COLORS).forEach(([cat, color]) => {
-    bodyHtml += `<span class="dot" style="background:${color}"></span>${cat}<br>`;
+    bodyHtml += `<label class="legend-cat-row"><input type="checkbox" class="legend-cat-cb" data-cat="${escapeHtml(cat)}" checked>` +
+      `<span class="dot" style="background:${color}"></span>${escapeHtml(cat)}</label>`;
   });
   div.innerHTML = `
-    <div class="legend-head"><span>Legende</span><span class="legend-arrow">▾</span></div>
+    <div class="legend-head"><span>Legende / Kategorien</span><span class="legend-arrow">▾</span></div>
     <div class="legend-body">${bodyHtml}</div>
   `;
   div.querySelector(".legend-head").addEventListener("click", (e) => {
     div.classList.toggle("collapsed");
     L.DomEvent.stopPropagation(e);
+  });
+  const allCats = Object.keys(CATEGORY_COLORS);
+  div.querySelectorAll(".legend-cat-cb").forEach(cb => {
+    cb.addEventListener("click", (e) => {
+      e.preventDefault();
+      const cat = cb.dataset.cat;
+      const isolating = !(hiddenCategories.size === allCats.length - 1 && !hiddenCategories.has(cat));
+      if (isolating) {
+        // Klick auf eine Kategorie: nur diese anzeigen, alle anderen abwählen
+        allCats.forEach(c => hiddenCategories.add(c));
+        hiddenCategories.delete(cat);
+      } else {
+        // war schon isoliert auf genau diese -> zurück zu "alle anzeigen"
+        hiddenCategories.clear();
+      }
+      div.querySelectorAll(".legend-cat-cb").forEach(other => {
+        other.checked = !hiddenCategories.has(other.dataset.cat);
+      });
+      buildMarkers();
+    });
+  });
+  div.querySelector(".legend-cat-all").addEventListener("click", () => {
+    hiddenCategories.clear();
+    div.querySelectorAll(".legend-cat-cb").forEach(cb => cb.checked = true);
+    buildMarkers();
+  });
+  div.querySelector(".legend-cat-none").addEventListener("click", () => {
+    div.querySelectorAll(".legend-cat-cb").forEach(cb => { cb.checked = false; hiddenCategories.add(cb.dataset.cat); });
+    buildMarkers();
   });
   L.DomEvent.disableClickPropagation(div);
   return div;
@@ -832,6 +872,7 @@ function applyFilters(data) {
   return data.filter(item => {
     if (gebiet && item.gebiet !== gebiet) return false;
     if (kategorie && item.kategorie !== kategorie) return false;
+    if (hiddenCategories.has(item.kategorie)) return false;
     if (b2c && item.b2c_b2b !== b2c) return false;
     if (ab && item.ab !== ab) return false;
     if (status && getEntry(item.id).status !== status) return false;

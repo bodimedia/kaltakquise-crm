@@ -404,16 +404,6 @@
   .d-fazit { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13.5px; color: #374151; }
   .d-fazit b { color: #2563eb; }
 
-  /* Bewertungs-Vergleich */
-  .d-rating-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-  .d-rating-table th {
-    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
-    color: #9ca3af; padding: 0 8px 8px; font-weight: 600;
-  }
-  .d-rating-table th.d-rating-sort-th { cursor: pointer; user-select: none; }
-  .d-rating-table th.d-rating-sort-th:hover { color: #2563eb; }
-  .d-rating-table td { padding: 10px 8px; border-top: 1px solid #f0f1f3; vertical-align: middle; }
-  .d-rating-table tr.d-rating-self td { background: #eff6ff; font-weight: 600; }
   .d-marktfuehrer-badge {
     display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase;
     letter-spacing: .03em; color: #d97706; background: rgba(217,119,6,.12); padding: 2px 8px; border-radius: 20px;
@@ -1726,7 +1716,6 @@ function emptyDossierRecord() { return { hidden_competitor_ids: [] }; }
 function openDossier(item) {
   currentDossierItem = item;
   dossierRadiusKm = 15;
-  ratingSortDir = "desc";
   const overlay = document.getElementById("dossier-overlay");
   overlay.classList.remove("pmode");
   overlay.classList.add("open");
@@ -1829,23 +1818,40 @@ function vorbildRegionScore(v) {
   if (!isFar) return 1;
   return 2;
 }
-function dossierVorbilderHtml(item) {
-  const b = BRANCHEN_BY_KATEGORIE[item.kategorie];
-  const vorbilder = ((b && b.vorbilder) || []).filter(v => v && v.Firma)
-    .slice()
-    .sort((a, c) => vorbildRegionScore(a) - vorbildRegionScore(c))
-    .slice(0, 2);
-  if (!vorbilder.length) return "";
-  const cards = vorbilder.map(v => {
-    const site = v.Website ? `<a href="${escapeHtml(v.Website)}" target="_blank" rel="noopener">${escapeHtml(v.Website.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "";
-    return `
-      <div class="d-vorbild-card">
-        <div class="d-vorbild-name">${escapeHtml(v.Firma)}</div>
-        <div class="d-vorbild-why">${escapeHtml(v.Warum)}</div>
-        ${site ? `<div class="d-vorbild-site">${site}</div>` : ""}
+function metaAdsLibraryLink(name) {
+  return `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=AT&q=${encodeURIComponent(name)}`;
+}
+function platzhirschCardHtml(p) {
+  const ratingText = `${(p.rating || 0).toFixed(1).replace(".", ",")} ★ · ${p.user_rating_count} Google-Bewertungen`;
+  return `
+    <div class="d-vorbild-card">
+      <div class="d-vorbild-name">${escapeHtml(p.Name)} <span class="d-marktfuehrer-badge">Marktführer der Region</span></div>
+      <div class="d-vorbild-why">${ratingText} — eines der etabliertesten Unternehmen der Region, echte Zahl direkt von Google (kein Web-Recherche-Beispiel). Ob aktuell Google/Meta Ads laufen, bitte manuell prüfen:
+        <a href="${metaAdsLibraryLink(p.Name)}" target="_blank" rel="noopener">Meta Ads Library</a>
       </div>
-    `;
-  }).join("");
+    </div>
+  `;
+}
+function dossierVorbilderHtml(item) {
+  const platzhirsche = platzhirscheFor(item.kategorie, item.gebiet).filter(p => p.user_rating_count >= 20);
+  const b = BRANCHEN_BY_KATEGORIE[item.kategorie];
+  const researched = ((b && b.vorbilder) || []).filter(v => v && v.Firma)
+    .slice()
+    .sort((a, c) => vorbildRegionScore(a) - vorbildRegionScore(c));
+
+  const slotsLeft = Math.max(0, 2 - platzhirsche.length);
+  const cards = platzhirsche.map(platzhirschCardHtml).join("")
+    + researched.slice(0, slotsLeft).map(v => {
+        const site = v.Website ? `<a href="${escapeHtml(v.Website)}" target="_blank" rel="noopener">${escapeHtml(v.Website.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "";
+        return `
+          <div class="d-vorbild-card">
+            <div class="d-vorbild-name">${escapeHtml(v.Firma)}</div>
+            <div class="d-vorbild-why">${escapeHtml(v.Warum)}</div>
+            ${site ? `<div class="d-vorbild-site">${site}</div>` : ""}
+          </div>
+        `;
+      }).join("");
+  if (!cards) return "";
   return `
     <div class="d-vorbilder-label">📣 Diese Betriebe zeigen, wie's geht</div>
     <div class="d-vorbilder-grid">${cards}</div>
@@ -1862,47 +1868,6 @@ function renderRegionBody(item) {
   const vorbilderHtml = dossierVorbilderHtml(item);
 
   document.getElementById("d-region-body").innerHTML = vorbilderHtml + fazit;
-}
-
-function dossierBewertungenHtml(item) {
-  const top3 = platzhirscheFor(item.kategorie, item.gebiet);
-  if (!top3.length && item.google_rating == null) return "";
-  return `<div class="d-card"><h2>Bewertungs-Vergleich</h2><div id="d-rating-body"></div></div>`;
-}
-
-let ratingSortDir = "desc";
-function renderRatingBody(item) {
-  const container = document.getElementById("d-rating-body");
-  if (!container) return;
-  const top3 = platzhirscheFor(item.kategorie, item.gebiet);
-  const rows = top3.map(p => ({
-    name: p.Name, isSelf: false, isMarktfuehrer: true,
-    rating: p.rating, count: p.user_rating_count,
-  }));
-  rows.push({
-    name: item.name + " (Sie)", isSelf: true, isMarktfuehrer: false,
-    rating: item.google_rating, count: item.google_bewertungen,
-  });
-  rows.sort((a, b) => {
-    const av = a.count == null ? -1 : a.count;
-    const bv = b.count == null ? -1 : b.count;
-    return ratingSortDir === "desc" ? bv - av : av - bv;
-  });
-  const bodyRows = rows.map(r => {
-    const ratingText = r.count == null
-      ? `<span class="d-empty-note">noch nicht erfasst</span>`
-      : `⭐ ${(r.rating || 0).toFixed(1).replace(".", ",")} · ${r.count} Bewertungen`;
-    const badge = r.isMarktfuehrer ? `<span class="d-marktfuehrer-badge">Marktführer der Region</span>` : "";
-    return `<tr class="${r.isSelf ? "d-rating-self" : ""}"><td><b>${escapeHtml(r.name)}</b>${badge}</td><td>${ratingText}</td></tr>`;
-  }).join("");
-  container.innerHTML = `
-    <table class="d-rating-table">
-      <thead><tr><th>Unternehmen</th><th class="d-rating-sort-th" id="d-rating-sort-th">⭐ Bewertung ${ratingSortDir === "desc" ? "▾" : "▴"}</th></tr></thead>
-      <tbody>${bodyRows}</tbody>
-    </table>
-  `;
-  const th = document.getElementById("d-rating-sort-th");
-  if (th) th.addEventListener("click", () => { ratingSortDir = ratingSortDir === "desc" ? "asc" : "desc"; renderRatingBody(item); });
 }
 
 function roiCalcHtml() {
@@ -2103,7 +2068,6 @@ function renderDossier() {
     dossierKopfHtml(item),
     dossierReichweiteHtml(item),
     dossierRegionHtml(item),
-    dossierBewertungenHtml(item),
     roiCalcHtml(),
     dossierVorgehenHtml(),
     `</div>`,
@@ -2114,7 +2078,6 @@ function renderDossier() {
   wireDossierChrome();
   wireDossierMap(item);
   renderRegionBody(item);
-  renderRatingBody(item);
   wireRoiCalc();
   wireDossierCrmExtras(item);
   updateReachUI(item, false);

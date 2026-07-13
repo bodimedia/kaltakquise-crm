@@ -337,6 +337,15 @@
     box-shadow: 0 2px 6px rgba(0,0,0,.1) !important;
   }
   .d-map-pin-label::before { display: none; }
+  .d-map-recenter {
+    position: absolute; right: 10px; bottom: 10px; z-index: 460; width: 36px; height: 36px;
+    border-radius: 50%; border: 1px solid #e5e7eb; background: #fff; font-size: 16px; cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,.15); display: flex; align-items: center; justify-content: center;
+  }
+  .d-map-recenter:active { background: #f3f4f6; }
+  .d-competitor-popup { text-align: center; }
+  .d-competitor-popup b { display: block; font-size: 13px; margin-bottom: 6px; }
+  .d-competitor-popup .d-mini-btn { font-size: 11px; }
 
   .d-radius-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
   .d-radius-label { font-size: 13.5px; font-weight: 600; color: #111827; white-space: nowrap; flex: 0 0 auto; }
@@ -391,22 +400,6 @@
   .d-vorbild-site { margin-top: 4px; }
   .d-vorbild-site a { font-size: 12px; color: #2563eb; text-decoration: none; }
   .d-vorbild-site a:hover { text-decoration: underline; }
-  .d-region-sublabel {
-    font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; font-weight: 700;
-    margin: 4px 0 8px;
-  }
-
-  /* Konkurrenz-Tabelle */
-  .d-konk-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .d-konk-table th {
-    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
-    color: #9ca3af; padding: 0 8px 8px; font-weight: 600;
-  }
-  .d-konk-table td { padding: 9px 8px; border-top: 1px solid #f0f1f3; vertical-align: middle; }
-  .d-konk-num {
-    display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
-    border-radius: 50%; background: #2563eb; color: #fff; font-size: 11.5px; font-weight: 700; flex: 0 0 auto;
-  }
   .d-empty-note { font-size: 13px; color: #9ca3af; font-style: italic; }
   .d-fazit { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13.5px; color: #374151; }
   .d-fazit b { color: #2563eb; }
@@ -495,8 +488,9 @@
 
   .pmode-exit {
     position: fixed; right: 14px; bottom: 14px; z-index: 5100;
-    width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
-    background: rgba(17,24,39,.06); color: rgba(17,24,39,.35); font-size: 16px;
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(17,24,39,.12); cursor: pointer;
+    background: rgba(255,255,255,.85); color: rgba(17,24,39,.55); font-size: 15px; font-weight: 700;
+    box-shadow: 0 1px 4px rgba(0,0,0,.12);
     display: none; align-items: center; justify-content: center;
   }
   #dossier-overlay.pmode .pmode-exit { display: flex; }
@@ -577,7 +571,7 @@
 
 <div id="dossier-overlay">
   <div class="dossier-scroll"><div class="dossier-body" id="dossier-content"></div></div>
-  <button class="pmode-exit" id="pmode-exit-btn" title="Kundenansicht verlassen">⋯</button>
+  <button class="pmode-exit" id="pmode-exit-btn" title="Kundenansicht verlassen">✕</button>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1660,9 +1654,26 @@ function updateCompetitorMarkers(competitors) {
   competitors.forEach(c => {
     if (!c.lat || !c.lng) return;
     const marker = L.circleMarker([c.lat, c.lng], {
-      radius: 6, color: "#fff", weight: 1.5, fillColor: "#f97316", fillOpacity: 0.9,
+      radius: 9, color: "#fff", weight: 2, fillColor: "#f97316", fillOpacity: 1,
     }).addTo(dossierMap);
-    marker.bindTooltip(escapeHtml(c.name), { direction: "top", offset: [0, -6], className: "d-map-pin-label" });
+    marker.bindPopup(`
+      <div class="d-competitor-popup">
+        <b>${escapeHtml(c.name)}</b>
+        <button class="d-mini-btn danger d-competitor-hide-btn" type="button" data-crm-only>✕ nicht passend, ausblenden</button>
+      </div>
+    `);
+    marker.on("popupopen", (e) => {
+      const el = e.popup.getElement();
+      const btn = el && el.querySelector(".d-competitor-hide-btn");
+      if (btn) {
+        btn.addEventListener("click", () => {
+          if (dossierHiddenCompetitors.indexOf(c.id) === -1) dossierHiddenCompetitors.push(c.id);
+          currentDossierData.hidden_competitor_ids = dossierHiddenCompetitors;
+          fbWriteDossier(currentDossierItem.id, currentDossierData);
+          renderRegionBody(currentDossierItem);
+        });
+      }
+    });
     competitorMarkers.push(marker);
   });
 }
@@ -1736,6 +1747,7 @@ function dossierReichweiteHtml(item) {
           <div class="d-map-wrap">
             <div id="d-map"></div>
             <div class="d-map-watermark">${escapeHtml((item.gebiet || "").split(" ")[0] || "")}</div>
+            <button class="d-map-recenter" id="d-map-recenter" type="button" title="Firma zentrieren">🎯</button>
           </div>
           <div class="d-radius-row">
             <span class="d-radius-label">Umkreis:</span>
@@ -1788,36 +1800,12 @@ function renderRegionBody(item) {
   const all = competitorsInRadius(item, dossierRadiusKm).filter(c => dossierHiddenCompetitors.indexOf(c.id) === -1);
   updateCompetitorMarkers(all);
 
-  const bodyRows = all.map((c, i) => `
-    <tr>
-      <td><span class="d-konk-num">${i + 1}</span></td>
-      <td>${escapeHtml(c.name)}</td>
-      <td>${escapeHtml((c.gebiet || "").split(" ")[0] || "")}</td>
-      <td data-crm-only><button class="d-mini-btn danger" type="button" data-konk-hide="${escapeHtml(c.id)}">✕</button></td>
-    </tr>
-  `).join("");
-  const table = all.length ? `
-    <table class="d-konk-table">
-      <thead><tr><th>#</th><th>Unternehmen</th><th>Ort</th><th data-crm-only></th></tr></thead>
-      <tbody>${bodyRows}</tbody>
-    </table>
-  ` : `<div class="d-empty-note">Keine weiteren ${escapeHtml(item.kategorie)}-Betriebe im gewählten Umkreis gefunden.</div>`;
   const fazit = all.length
-    ? `<div class="d-fazit">📍 <span><b>${all.length}</b> weitere ${escapeHtml(item.kategorie)}-Betriebe im Umkreis von ${Math.round(dossierRadiusKm)} km — auf der Karte oben markiert.</span></div>`
-    : "";
+    ? `<div class="d-fazit">📍 <span><b>${all.length}</b> weitere ${escapeHtml(item.kategorie)}-Betriebe im Umkreis von ${Math.round(dossierRadiusKm)} km — auf der Karte oben markiert (antippen für Details).</span></div>`
+    : `<div class="d-empty-note">Keine weiteren ${escapeHtml(item.kategorie)}-Betriebe im gewählten Umkreis gefunden.</div>`;
   const vorbilderHtml = dossierVorbilderHtml(item);
-  const localLabel = vorbilderHtml ? `<div class="d-region-sublabel">In Ihrem Umkreis</div>` : "";
 
-  document.getElementById("d-region-body").innerHTML = vorbilderHtml + localLabel + fazit + table;
-  document.querySelectorAll("[data-konk-hide]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const id = btn.dataset.konkHide;
-      if (dossierHiddenCompetitors.indexOf(id) === -1) dossierHiddenCompetitors.push(id);
-      currentDossierData.hidden_competitor_ids = dossierHiddenCompetitors;
-      fbWriteDossier(item.id, currentDossierData);
-      renderRegionBody(item);
-    });
-  });
+  document.getElementById("d-region-body").innerHTML = vorbilderHtml + fazit;
 }
 
 function roiCalcHtml() {
@@ -2050,8 +2038,8 @@ function wireDossierMap(item) {
   if (dossierMap) { dossierMap.remove(); dossierMap = null; }
   if (!item.lat || !item.lng) return;
   dossierMap = L.map("d-map", {
-    zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false,
-    touchZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false,
+    zoomControl: false, attributionControl: false, dragging: true, scrollWheelZoom: true,
+    touchZoom: true, doubleClickZoom: true, boxZoom: false, keyboard: false, tap: true,
   }).setView([item.lat, item.lng], radiusToZoom(dossierRadiusKm));
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(dossierMap);
   dossierMapMarker = L.marker([item.lat, item.lng]).addTo(dossierMap);
@@ -2077,6 +2065,8 @@ function wireDossierMap(item) {
     setDossierRadius(item, v, true);
     fitDossierMap();
   });
+  const recenterBtn = document.getElementById("d-map-recenter");
+  if (recenterBtn) recenterBtn.addEventListener("click", () => fitDossierMap());
 }
 function fitDossierMap() {
   if (!dossierMap || !dossierMapCircle) return;

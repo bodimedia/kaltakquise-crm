@@ -407,11 +407,6 @@
     display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
     border-radius: 50%; background: #2563eb; color: #fff; font-size: 11.5px; font-weight: 700; flex: 0 0 auto;
   }
-  .d-konk-self td { background: #f8fafc; font-weight: 600; }
-  .d-status { font-size: 13px; font-weight: 600; white-space: nowrap; }
-  .d-status.aktiv { color: #dc2626; }
-  .d-status.frueher { color: #d97706; }
-  .d-status.unsichtbar { color: #6b7280; }
   .d-empty-note { font-size: 13px; color: #9ca3af; font-style: italic; }
   .d-fazit { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13.5px; color: #374151; }
   .d-fazit b { color: #2563eb; }
@@ -1645,20 +1640,6 @@ function computeReachPersons(centerLat, centerLng, radiusKm, minAge, maxAge) {
   return total * REACH_KALIBRIERUNG_FAKTOR;
 }
 
-function pixelIsPositive(marketingText) {
-  const m = (marketingText || "").match(/Pixel:\s*([^|]+)/);
-  if (!m) return false;
-  const t = m[1];
-  if (/kein(e)?\s+(Tracking|Facebook[- ]?Pixel|fbq|GTM)/i.test(t)) return false;
-  if (/nicht (geprüft|prüfbar)/i.test(t)) return false;
-  if (/(fbq|gtag|GTM|Facebook-Pixel)[^.]*gefunden/i.test(t)) return true;
-  return false;
-}
-function competitorStatus(item) {
-  if (pixelIsPositive(item.marketing)) return { key: "aktiv", label: "schaltet aktiv Werbung", cls: "aktiv" };
-  if (item.fb_page) return { key: "frueher", label: "hat früher geworben", cls: "frueher" };
-  return { key: "unsichtbar", label: "digital unsichtbar", cls: "unsichtbar" };
-}
 function competitorsInRadius(item, radiusKm) {
   return DATA.filter(d => d.kategorie === item.kategorie && d.id !== item.id && d.lat && d.lng)
     .map(d => Object.assign({}, d, { _dist: haversineKm(item.lat, item.lng, d.lat, d.lng) }))
@@ -1671,6 +1652,20 @@ let currentDossierData = null;
 let dossierRadiusKm = 15;
 let dossierHiddenCompetitors = [];
 let dossierMap = null, dossierMapCircle = null, dossierMapMarker = null;
+let competitorMarkers = [];
+function updateCompetitorMarkers(competitors) {
+  competitorMarkers.forEach(m => dossierMap && dossierMap.removeLayer(m));
+  competitorMarkers = [];
+  if (!dossierMap) return;
+  competitors.forEach(c => {
+    if (!c.lat || !c.lng) return;
+    const marker = L.circleMarker([c.lat, c.lng], {
+      radius: 6, color: "#fff", weight: 1.5, fillColor: "#f97316", fillOpacity: 0.9,
+    }).addTo(dossierMap);
+    marker.bindTooltip(escapeHtml(c.name), { direction: "top", offset: [0, -6], className: "d-map-pin-label" });
+    competitorMarkers.push(marker);
+  });
+}
 let reachAnimHandle = null, radiusAnimHandle = null;
 
 function emptyDossierRecord() { return { hidden_competitor_ids: [] }; }
@@ -1791,48 +1786,29 @@ function dossierVorbilderHtml(item) {
 
 function renderRegionBody(item) {
   const all = competitorsInRadius(item, dossierRadiusKm).filter(c => dossierHiddenCompetitors.indexOf(c.id) === -1);
-  const selfStatus = competitorStatus(item);
-  const rows = all.concat([Object.assign({}, item, { _isSelf: true })]);
-  const activeCount = rows.filter(r => competitorStatus(r).key === "aktiv").length;
+  updateCompetitorMarkers(all);
 
-  const bodyRows = all.map((c, i) => {
-    const st = competitorStatus(c);
-    return `
-      <tr>
-        <td><span class="d-konk-num">${i + 1}</span></td>
-        <td>${escapeHtml(c.name)}</td>
-        <td>${escapeHtml((c.gebiet || "").split(" ")[0] || "")}</td>
-        <td><span class="d-status ${st.cls}">${st.label}</span></td>
-        <td data-crm-only><button class="d-mini-btn danger" type="button" data-konk-hide="${escapeHtml(c.id)}">✕</button></td>
-      </tr>
-    `;
-  }).join("");
-  const selfRow = `
-    <tr class="d-konk-self">
-      <td><span class="d-konk-num">${all.length + 1}</span></td>
-      <td>${escapeHtml(item.name)} (Sie)</td>
-      <td>${escapeHtml((item.gebiet || "").split(" ")[0] || "")}</td>
-      <td><span class="d-status ${selfStatus.cls}">${selfStatus.label}</span></td>
-      <td data-crm-only></td>
+  const bodyRows = all.map((c, i) => `
+    <tr>
+      <td><span class="d-konk-num">${i + 1}</span></td>
+      <td>${escapeHtml(c.name)}</td>
+      <td>${escapeHtml((c.gebiet || "").split(" ")[0] || "")}</td>
+      <td data-crm-only><button class="d-mini-btn danger" type="button" data-konk-hide="${escapeHtml(c.id)}">✕</button></td>
     </tr>
-  `;
+  `).join("");
   const table = all.length ? `
     <table class="d-konk-table">
-      <thead><tr><th>#</th><th>Unternehmen</th><th>Ort</th><th>Wettbewerb</th><th data-crm-only></th></tr></thead>
-      <tbody>${bodyRows}${selfRow}</tbody>
+      <thead><tr><th>#</th><th>Unternehmen</th><th>Ort</th><th data-crm-only></th></tr></thead>
+      <tbody>${bodyRows}</tbody>
     </table>
-  ` : `
-    <table class="d-konk-table">
-      <thead><tr><th>#</th><th>Unternehmen</th><th>Ort</th><th>Wettbewerb</th><th data-crm-only></th></tr></thead>
-      <tbody>${selfRow}</tbody>
-    </table>
-    <div class="d-empty-note" style="margin-top:8px;">Keine weiteren ${escapeHtml(item.kategorie)}-Betriebe im gewählten Umkreis gefunden.</div>
-  `;
-  const fazit = `<div class="d-fazit">📈 <span><b>${activeCount} von ${rows.length}</b> ${escapeHtml(item.kategorie)}-Betrieben in Ihrer Region werben bereits aktiv.</span></div>`;
+  ` : `<div class="d-empty-note">Keine weiteren ${escapeHtml(item.kategorie)}-Betriebe im gewählten Umkreis gefunden.</div>`;
+  const fazit = all.length
+    ? `<div class="d-fazit">📍 <span><b>${all.length}</b> weitere ${escapeHtml(item.kategorie)}-Betriebe im Umkreis von ${Math.round(dossierRadiusKm)} km — auf der Karte oben markiert.</span></div>`
+    : "";
   const vorbilderHtml = dossierVorbilderHtml(item);
   const localLabel = vorbilderHtml ? `<div class="d-region-sublabel">In Ihrem Umkreis</div>` : "";
 
-  document.getElementById("d-region-body").innerHTML = vorbilderHtml + localLabel + table + fazit;
+  document.getElementById("d-region-body").innerHTML = vorbilderHtml + localLabel + fazit + table;
   document.querySelectorAll("[data-konk-hide]").forEach(btn => {
     btn.addEventListener("click", () => {
       const id = btn.dataset.konkHide;
@@ -2079,7 +2055,7 @@ function wireDossierMap(item) {
   }).setView([item.lat, item.lng], radiusToZoom(dossierRadiusKm));
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(dossierMap);
   dossierMapMarker = L.marker([item.lat, item.lng]).addTo(dossierMap);
-  dossierMapMarker.bindTooltip(`<b>${escapeHtml(item.name)}</b><br>${escapeHtml(item.adresse || "")}`, {
+  dossierMapMarker.bindTooltip(`<b>${escapeHtml(item.name)}</b>`, {
     permanent: true, direction: "bottom", offset: [0, 12], className: "d-map-pin-label",
   }).openTooltip();
   dossierMapCircle = L.circle([item.lat, item.lng], {

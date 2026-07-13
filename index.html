@@ -1776,9 +1776,22 @@ function dossierRegionHtml(item) {
   return `<div class="d-card"><h2>Ihre Region</h2><div id="d-region-body"></div></div>`;
 }
 
+const FAR_REGION_HINTS = ["Vorarlberg", "Tirol", "Salzburg", "Oberösterreich", " OÖ", "Steiermark", "Kärnten", "Deutschland", "Germany", "Bayern", "München", "Berlin", "Linz", "Graz", "Innsbruck"];
+const NEAR_REGION_HINTS = ["Wien", "Niederösterreich", " NÖ", "Burgenland", "Gerasdorf", "Marchfeld"];
+function vorbildRegionScore(v) {
+  const text = (v.Firma || "") + " " + (v.Warum || "");
+  const isNear = NEAR_REGION_HINTS.some(r => text.indexOf(r) !== -1);
+  const isFar = FAR_REGION_HINTS.some(r => text.indexOf(r) !== -1);
+  if (isNear) return 0;
+  if (!isFar) return 1;
+  return 2;
+}
 function dossierVorbilderHtml(item) {
   const b = BRANCHEN_BY_KATEGORIE[item.kategorie];
-  const vorbilder = ((b && b.vorbilder) || []).filter(v => v && v.Firma).slice(0, 2);
+  const vorbilder = ((b && b.vorbilder) || []).filter(v => v && v.Firma)
+    .slice()
+    .sort((a, c) => vorbildRegionScore(a) - vorbildRegionScore(c))
+    .slice(0, 2);
   if (!vorbilder.length) return "";
   const cards = vorbilder.map(v => {
     const site = v.Website ? `<a href="${escapeHtml(v.Website)}" target="_blank" rel="noopener">${escapeHtml(v.Website.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "";

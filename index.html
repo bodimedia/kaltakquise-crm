@@ -559,6 +559,7 @@
     <input type="text" id="route-search" placeholder="Firma zur Route hinzufügen … Name oder Ort" autocomplete="off">
     <div id="route-search-results"></div>
     <button id="btn-route-maps" class="primary">📍 In Google Maps öffnen</button>
+    <button id="btn-route-auto">🤖 Automatische Route (25 Firmen)</button>
     <button id="btn-route-clear">Route leeren</button>
   </div>
   <div id="route-body">
@@ -2297,6 +2298,77 @@ routeSearchResults.addEventListener("click", (e) => {
 document.addEventListener("click", (e) => {
   if (!e.target.closest("#route-toolbar")) routeSearchResults.classList.remove("show");
 });
+
+const AUTO_ROUTE_BATCH_SIZE = 25;
+function autoGenerateRoute() {
+  const pool = DATA.filter(item => {
+    const st = getEntry(item.id);
+    const status = st.status || "offen";
+    return status === "offen" && item.lat && item.lng;
+  }).slice();
+
+  if (!pool.length) {
+    alert("Keine offenen Firmen mehr für eine automatische Route.");
+    return;
+  }
+
+  // Falls schon eine Firma manuell in der Route steht (über die Suche oben
+  // hinzugefügt), wird SIE als Startpunkt für den Cluster verwendet - sonst
+  // die offene Firma, die am nächsten am Zuhause liegt.
+  const existingStops = routeState.stopIds.map(id => DATA_BY_ID[id]).filter(Boolean);
+  let cluster, usedManualSeed = false;
+  if (existingStops.length) {
+    const seedCompany = existingStops[0];
+    const idx = pool.findIndex(p => p.id === seedCompany.id);
+    if (idx !== -1) pool.splice(idx, 1);
+    cluster = [seedCompany];
+    usedManualSeed = true;
+  } else {
+    let seedIdx = 0, seedDist = Infinity;
+    pool.forEach((item, i) => {
+      const d = haversineKm(HOME_COORDS[0], HOME_COORDS[1], item.lat, item.lng);
+      if (d < seedDist) { seedDist = d; seedIdx = i; }
+    });
+    cluster = [pool.splice(seedIdx, 1)[0]];
+  }
+
+  // Cluster wächst immer um die Firma, die am nächsten an IRGENDEINER bereits
+  // gewählten Firma liegt - hält die Gruppe geografisch eng zusammen.
+  while (cluster.length < AUTO_ROUTE_BATCH_SIZE && pool.length) {
+    let bestIdx = -1, bestDist = Infinity;
+    pool.forEach((item, i) => {
+      let minD = Infinity;
+      cluster.forEach(c => {
+        const d = haversineKm(c.lat, c.lng, item.lat, item.lng);
+        if (d < minD) minD = d;
+      });
+      if (minD < bestDist) { bestDist = minD; bestIdx = i; }
+    });
+    cluster.push(pool.splice(bestIdx, 1)[0]);
+  }
+
+  // Reihenfolge innerhalb des Clusters: einfache Nearest-Neighbor-Route ab Zuhause.
+  const ordered = [];
+  let curLat = HOME_COORDS[0], curLng = HOME_COORDS[1];
+  const remaining = cluster.slice();
+  while (remaining.length) {
+    let bestIdx = 0, bestDist = Infinity;
+    remaining.forEach((item, i) => {
+      const d = haversineKm(curLat, curLng, item.lat, item.lng);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    });
+    const next = remaining.splice(bestIdx, 1)[0];
+    ordered.push(next);
+    curLat = next.lat; curLng = next.lng;
+  }
+
+  routeState.stopIds = ordered.map(item => item.id);
+  saveRoute();
+  alert(usedManualSeed
+    ? `Automatische Route mit ${ordered.length} Firmen ab "${cluster[0].name}" erstellt.`
+    : `Automatische Route mit ${ordered.length} Firmen ab Zuhause erstellt.`);
+}
+document.getElementById("btn-route-auto").addEventListener("click", autoGenerateRoute);
 
 document.getElementById("btn-route-clear").addEventListener("click", () => {
   if (confirm("Route wirklich leeren?")) {

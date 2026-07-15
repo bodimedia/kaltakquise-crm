@@ -1601,10 +1601,14 @@ const PLATZHIRSCHE_GEBIET_ALIAS = {
 };
 function platzhirscheRegionForGebiet(gebiet) {
   const stripped = (gebiet || "").replace(/\s*\([^)]*\)\s*$/, "").trim().toLowerCase();
-  return PLATZHIRSCHE_GEBIET_ALIAS[stripped] || "Marchfeld (allgemein)";
+  // Nur echte Treffer der recherchierten Regionen zurückgeben - kein Fallback auf
+  // "Marchfeld (allgemein)", sonst würde z.B. eine Liesing-Firma (ganz andere
+  // Stadtseite) fälschlich Marchfeld-Konkurrenten als regional relevant angezeigt bekommen.
+  return PLATZHIRSCHE_GEBIET_ALIAS[stripped] || null;
 }
 function platzhirscheFor(kategorie, gebiet) {
   const region = platzhirscheRegionForGebiet(gebiet);
+  if (!region) return [];
   return PLATZHIRSCHE_DATA
     .filter(p => p.Kategorie === kategorie && p.Region === region)
     .slice()

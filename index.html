@@ -1009,6 +1009,10 @@ function statusSelectHtml(id, cssClass) {
   return `<select class="${cssClass}">${opts}</select>`;
 }
 
+function googleSearchLink(item) {
+  const query = `${item.name} ${item.adresse || ""}`.trim();
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
 function popupHtml(item) {
   const st = getEntry(item.id);
   const telHref = item.telefon ? `<a href="tel:${item.telefon.replace(/[^\d+]/g, "")}">${escapeHtml(item.telefon)}</a>` : "–";
@@ -1019,6 +1023,7 @@ function popupHtml(item) {
       <span class="badge" style="background:#e5e7eb">${escapeHtml(item.rechtsform || "")}</span>
       <div class="row"><b>${escapeHtml(item.kategorie)}</b> · ${escapeHtml(item.b2c_b2b)}</div>
       <div class="row">${escapeHtml(item.adresse)} <i>(${escapeHtml(item.gebiet)})</i></div>
+      <div class="row">🔍 <a href="${googleSearchLink(item)}" target="_blank" rel="noopener">Google Business Profil ansehen</a></div>
       ${item.gf ? `<div class="row">GF/Inh.: ${escapeHtml(item.gf)}</div>` : ""}
       <div class="row">Tel: ${telHref}</div>
       <div class="row website-row" data-id="${item.id}">

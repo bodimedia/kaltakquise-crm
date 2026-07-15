@@ -343,9 +343,6 @@
     box-shadow: 0 2px 6px rgba(0,0,0,.15); display: flex; align-items: center; justify-content: center;
   }
   .d-map-recenter:active { background: #f3f4f6; }
-  .d-competitor-popup { text-align: center; }
-  .d-competitor-popup b { display: block; font-size: 13px; margin-bottom: 6px; }
-  .d-competitor-popup .d-mini-btn { font-size: 11px; }
 
   .d-radius-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
   .d-radius-label { font-size: 13.5px; font-weight: 600; color: #111827; white-space: nowrap; flex: 0 0 auto; }
@@ -400,9 +397,6 @@
   .d-vorbild-site { margin-top: 4px; }
   .d-vorbild-site a { font-size: 12px; color: #2563eb; text-decoration: none; }
   .d-vorbild-site a:hover { text-decoration: underline; }
-  .d-empty-note { font-size: 13px; color: #9ca3af; font-style: italic; }
-  .d-fazit { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13.5px; color: #374151; }
-  .d-fazit b { color: #2563eb; }
 
   .d-marktfuehrer-badge {
     display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -727,10 +721,6 @@ function fbWriteLeadState(id, entry) {
     skala_wert: entry.skala_wert == null ? null : entry.skala_wert,
     folgetermin: entry.folgetermin || null,
   });
-}
-function fbWriteDossier(id, dossier) {
-  if (!fbReady || !fbDb) return;
-  fbDb.ref("leads_dossier/" + id).set(dossier);
 }
 function fbWriteRoute() {
   if (!fbReady || !fbDb) return;
@@ -1662,56 +1652,10 @@ function computeReachPersons(centerLat, centerLng, radiusKm, minAge, maxAge) {
   return total * REACH_KALIBRIERUNG_FAKTOR;
 }
 
-function competitorsInRadius(item, radiusKm) {
-  return DATA.filter(d => d.kategorie === item.kategorie && d.id !== item.id && d.lat && d.lng)
-    .map(d => Object.assign({}, d, { _dist: haversineKm(item.lat, item.lng, d.lat, d.lng) }))
-    .filter(d => d._dist <= radiusKm)
-    .sort((a, b) => a._dist - b._dist);
-}
-
 let currentDossierItem = null;
-let currentDossierData = null;
 let dossierRadiusKm = 15;
-let dossierHiddenCompetitors = [];
 let dossierMap = null, dossierMapCircle = null, dossierMapMarker = null;
-let competitorMarkers = [];
-function updateCompetitorMarkers(competitors) {
-  competitorMarkers.forEach(m => dossierMap && dossierMap.removeLayer(m));
-  competitorMarkers = [];
-  if (!dossierMap) return;
-  competitors.forEach(c => {
-    if (!c.lat || !c.lng) return;
-    const marker = L.circleMarker([c.lat, c.lng], {
-      radius: 9, color: "#fff", weight: 2, fillColor: "#f97316", fillOpacity: 1,
-    }).addTo(dossierMap);
-    const ratingLine = c.google_bewertungen != null
-      ? `<div style="font-size:11.5px;color:#6b7280;margin:2px 0 6px;">⭐ ${(c.google_rating || 0).toFixed(1).replace(".", ",")} · ${c.google_bewertungen} Bewertungen</div>`
-      : "";
-    marker.bindPopup(`
-      <div class="d-competitor-popup">
-        <b>${escapeHtml(c.name)}</b>
-        ${ratingLine}
-        <button class="d-mini-btn danger d-competitor-hide-btn" type="button" data-crm-only>✕ nicht passend, ausblenden</button>
-      </div>
-    `);
-    marker.on("popupopen", (e) => {
-      const el = e.popup.getElement();
-      const btn = el && el.querySelector(".d-competitor-hide-btn");
-      if (btn) {
-        btn.addEventListener("click", () => {
-          if (dossierHiddenCompetitors.indexOf(c.id) === -1) dossierHiddenCompetitors.push(c.id);
-          currentDossierData.hidden_competitor_ids = dossierHiddenCompetitors;
-          fbWriteDossier(currentDossierItem.id, currentDossierData);
-          renderRegionBody(currentDossierItem);
-        });
-      }
-    });
-    competitorMarkers.push(marker);
-  });
-}
 let reachAnimHandle = null, radiusAnimHandle = null;
-
-function emptyDossierRecord() { return { hidden_competitor_ids: [] }; }
 
 function openDossier(item) {
   currentDossierItem = item;
@@ -1719,23 +1663,12 @@ function openDossier(item) {
   const overlay = document.getElementById("dossier-overlay");
   overlay.classList.remove("pmode");
   overlay.classList.add("open");
-  document.getElementById("dossier-content").innerHTML = `<div style="padding:60px 20px;text-align:center;color:#9ca3af;">Lade Markt-Analyse …</div>`;
-  const proceed = (rec) => {
-    currentDossierData = rec || emptyDossierRecord();
-    dossierHiddenCompetitors = currentDossierData.hidden_competitor_ids || [];
-    renderDossier();
-  };
-  if (fbReady && fbDb) {
-    fbDb.ref("leads_dossier/" + item.id).once("value").then(snap => proceed(snap.val())).catch(() => proceed(null));
-  } else {
-    proceed(null);
-  }
+  renderDossier();
 }
 function closeDossier() {
   document.getElementById("dossier-overlay").classList.remove("open", "pmode");
   if (dossierMap) { dossierMap.remove(); dossierMap = null; }
   currentDossierItem = null;
-  currentDossierData = null;
 }
 function enterPresentationMode() {
   document.getElementById("dossier-overlay").classList.add("pmode");
@@ -1804,10 +1737,6 @@ function dossierReichweiteHtml(item) {
   `;
 }
 
-function dossierRegionHtml(item) {
-  return `<div class="d-card"><h2>Ihre Region</h2><div id="d-region-body"></div></div>`;
-}
-
 const FAR_REGION_HINTS = ["Vorarlberg", "Tirol", "Salzburg", "Oberösterreich", " OÖ", "Steiermark", "Kärnten", "Deutschland", "Germany", "Bayern", "München", "Berlin", "Linz", "Graz", "Innsbruck"];
 const NEAR_REGION_HINTS = ["Wien", "Niederösterreich", " NÖ", "Burgenland", "Gerasdorf", "Marchfeld"];
 function vorbildRegionScore(v) {
@@ -1832,42 +1761,33 @@ function platzhirschCardHtml(p) {
     </div>
   `;
 }
-function dossierVorbilderHtml(item) {
+function dossierVorbildHtml(item) {
   const platzhirsche = platzhirscheFor(item.kategorie, item.gebiet).filter(p => p.user_rating_count >= 20);
-  const b = BRANCHEN_BY_KATEGORIE[item.kategorie];
-  const researched = ((b && b.vorbilder) || []).filter(v => v && v.Firma)
-    .slice()
-    .sort((a, c) => vorbildRegionScore(a) - vorbildRegionScore(c));
-
-  const slotsLeft = Math.max(0, 2 - platzhirsche.length);
-  const cards = platzhirsche.map(platzhirschCardHtml).join("")
-    + researched.slice(0, slotsLeft).map(v => {
-        const site = v.Website ? `<a href="${escapeHtml(v.Website)}" target="_blank" rel="noopener">${escapeHtml(v.Website.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "";
-        return `
-          <div class="d-vorbild-card">
-            <div class="d-vorbild-name">${escapeHtml(v.Firma)}</div>
-            <div class="d-vorbild-why">${escapeHtml(v.Warum)}</div>
-            ${site ? `<div class="d-vorbild-site">${site}</div>` : ""}
-          </div>
-        `;
-      }).join("");
-  if (!cards) return "";
+  let card;
+  if (platzhirsche.length) {
+    card = platzhirschCardHtml(platzhirsche[0]);
+  } else {
+    const b = BRANCHEN_BY_KATEGORIE[item.kategorie];
+    const researched = ((b && b.vorbilder) || []).filter(v => v && v.Firma)
+      .slice()
+      .sort((a, c) => vorbildRegionScore(a) - vorbildRegionScore(c));
+    if (!researched.length) return "";
+    const v = researched[0];
+    const site = v.Website ? `<a href="${escapeHtml(v.Website)}" target="_blank" rel="noopener">${escapeHtml(v.Website.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>` : "";
+    card = `
+      <div class="d-vorbild-card">
+        <div class="d-vorbild-name">${escapeHtml(v.Firma)}</div>
+        <div class="d-vorbild-why">${escapeHtml(v.Warum)}</div>
+        ${site ? `<div class="d-vorbild-site">${site}</div>` : ""}
+      </div>
+    `;
+  }
   return `
-    <div class="d-vorbilder-label">📣 Diese Betriebe zeigen, wie's geht</div>
-    <div class="d-vorbilder-grid">${cards}</div>
+    <div class="d-card">
+      <h2>Diese Betriebe zeigen, wie's geht</h2>
+      <div class="d-vorbilder-grid">${card}</div>
+    </div>
   `;
-}
-
-function renderRegionBody(item) {
-  const all = competitorsInRadius(item, dossierRadiusKm).filter(c => dossierHiddenCompetitors.indexOf(c.id) === -1);
-  updateCompetitorMarkers(all);
-
-  const fazit = all.length
-    ? `<div class="d-fazit">📍 <span><b>${all.length}</b> weitere ${escapeHtml(item.kategorie)}-Betriebe im Umkreis von ${Math.round(dossierRadiusKm)} km — auf der Karte oben markiert (antippen für Details).</span></div>`
-    : `<div class="d-empty-note">Keine weiteren ${escapeHtml(item.kategorie)}-Betriebe im gewählten Umkreis gefunden.</div>`;
-  const vorbilderHtml = dossierVorbilderHtml(item);
-
-  document.getElementById("d-region-body").innerHTML = vorbilderHtml + fazit;
 }
 
 function roiCalcHtml() {
@@ -2067,7 +1987,7 @@ function renderDossier() {
     `<div class="d-content-pad">`,
     dossierKopfHtml(item),
     dossierReichweiteHtml(item),
-    dossierRegionHtml(item),
+    dossierVorbildHtml(item),
     roiCalcHtml(),
     dossierVorgehenHtml(),
     `</div>`,
@@ -2077,7 +1997,6 @@ function renderDossier() {
   document.getElementById("dossier-content").innerHTML = html;
   wireDossierChrome();
   wireDossierMap(item);
-  renderRegionBody(item);
   wireRoiCalc();
   wireDossierCrmExtras(item);
   updateReachUI(item, false);
@@ -2141,7 +2060,6 @@ function setDossierRadius(item, km, animate) {
   if (!animate) {
     if (dossierMapCircle) dossierMapCircle.setRadius(km * 1000);
     updateReachUI(item, false);
-    renderRegionBody(item);
     return;
   }
   const start = performance.now(), duration = 280;
@@ -2152,7 +2070,7 @@ function setDossierRadius(item, km, animate) {
     if (dossierMapCircle) dossierMapCircle.setRadius(cur * 1000);
     updateReachUI(item, true, cur);
     if (t < 1) radiusAnimHandle = requestAnimationFrame(step);
-    else { updateReachUI(item, false); renderRegionBody(item); }
+    else { updateReachUI(item, false); }
   }
   radiusAnimHandle = requestAnimationFrame(step);
 }
@@ -2224,10 +2142,6 @@ function wireDossierCrmExtras(item) {
   if (followNote) followNote.addEventListener("change", saveFollow);
 }
 
-function fbWriteDossier(id, rec) {
-  if (!fbReady || !fbDb) return;
-  fbDb.ref("leads_dossier/" + id).set(rec);
-}
 document.getElementById("pmode-exit-btn").addEventListener("click", exitPresentationMode);
 
 // ---------- Route planner ----------

@@ -30,6 +30,7 @@
   #topbar button.secondary:hover { background: #4b5563; }
   #topbar button.tab-btn { background: #374151; }
   #topbar button.tab-btn.active { background: #2563eb; }
+  #btn-route-mode.active { background: #ef7a44; color: #0f1c28; font-weight: 700; }
   #stats { font-size: 12px; color: #cbd5e1; margin-left: auto; white-space: nowrap; }
 
   #view-map { flex: 1; display: flex; min-height: 0; }
@@ -526,6 +527,7 @@
   <button id="tab-pipeline" class="tab-btn">📋 Pipeline</button>
   <button id="tab-branchen" class="tab-btn">📐 Branchen</button>
   <button id="tab-route" class="tab-btn">🚗 Route</button>
+  <button id="btn-route-mode" class="secondary" title="Firmen auf der Karte antippen, um sie direkt zur Route hinzuzufügen/zu entfernen">🗺️ Routenmodus</button>
   <select id="f-gebiet"><option value="">Alle Gebiete</option></select>
   <select id="f-kategorie"><option value="">Alle Kategorien</option></select>
   <select id="f-b2c"><option value="">B2C/B2B: Alle</option></select>
@@ -1150,7 +1152,15 @@ function buildMarkers() {
       maxHeight: Math.round(Math.min(420, window.innerHeight * 0.65)),
       autoPanPadding: [20, 20],
     });
-    marker.on("popupopen", (e) => wirePopup(e.popup, item));
+    marker.on("popupopen", (e) => {
+      if (routeModeActive) {
+        marker.closePopup();
+        toggleRouteStop(item.id);
+        updateRouteModeCounter();
+        return;
+      }
+      wirePopup(e.popup, item);
+    });
     marker.addTo(markersLayer);
     markerById[item.id] = marker;
     updateStatusIcon(item);
@@ -1181,6 +1191,21 @@ function toggleRouteStop(id) {
   else routeState.stopIds.splice(idx, 1);
   saveRoute();
 }
+
+let routeModeActive = false;
+function updateRouteModeCounter() {
+  const btn = document.getElementById("btn-route-mode");
+  if (!btn) return;
+  btn.textContent = routeModeActive
+    ? `🗺️ Routenmodus AN (${routeState.stopIds.length})`
+    : "🗺️ Routenmodus";
+}
+document.getElementById("btn-route-mode").addEventListener("click", () => {
+  routeModeActive = !routeModeActive;
+  document.getElementById("btn-route-mode").classList.toggle("active", routeModeActive);
+  updateRouteModeCounter();
+  if (routeModeActive && !tabMapBtn.classList.contains("active")) tabMapBtn.click();
+});
 
 function wirePopup(popup, item) {
   const el = popup.getElement();
@@ -2264,6 +2289,7 @@ function saveRoute() {
   renderRoute();
   refreshRouteBadges();
   fbWriteRoute();
+  updateRouteModeCounter();
 }
 
 document.getElementById("route-start").addEventListener("change", (e) => {

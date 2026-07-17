@@ -454,10 +454,18 @@
   .d-portfolio-grid { display: flex; flex-direction: column; gap: 16px; }
   .d-portfolio-item { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
   .d-portfolio-label {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
     font-size: 12px; font-weight: 700; color: #111827; padding: 8px 12px;
     background: #f8fafc; border-bottom: 1px solid #e5e7eb;
   }
-  .d-portfolio-frame { width: 100%; height: 440px; border: none; display: block; }
+  .d-portfolio-toggle { display: flex; gap: 4px; }
+  .d-pt-btn {
+    font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 20px; border: 1px solid #e5e7eb;
+    background: #fff; color: #6b7280; cursor: pointer;
+  }
+  .d-pt-btn.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .d-portfolio-frame-wrap { position: relative; width: 100%; height: 440px; overflow: hidden; }
+  .d-portfolio-frame { border: none; display: block; }
 
   /* Footer */
   .d-footer {
@@ -1982,14 +1990,53 @@ const PORTFOLIO_WEBSITES = [
   { name: "Homelife Studio", url: "https://www.homelifestudio.at/" },
   { name: "Elementkraft Solar", url: "https://www.elementkraft-solar.ch/" },
 ];
+const PORTFOLIO_DESKTOP_WIDTH = 1440;
 function dossierWebsitesHtml() {
-  const frames = PORTFOLIO_WEBSITES.map(w => `
-    <div class="d-portfolio-item">
-      <div class="d-portfolio-label">${escapeHtml(w.name)}</div>
-      <iframe class="d-portfolio-frame" src="${escapeHtml(w.url)}" loading="lazy" title="${escapeHtml(w.name)}"></iframe>
+  const frames = PORTFOLIO_WEBSITES.map((w, i) => `
+    <div class="d-portfolio-item" data-portfolio-idx="${i}">
+      <div class="d-portfolio-label">
+        <span>${escapeHtml(w.name)}</span>
+        <div class="d-portfolio-toggle">
+          <button type="button" class="d-pt-btn active" data-view="desktop">🖥️ Desktop</button>
+          <button type="button" class="d-pt-btn" data-view="mobile">📱 Mobile</button>
+        </div>
+      </div>
+      <div class="d-portfolio-frame-wrap" data-view="desktop">
+        <iframe class="d-portfolio-frame" src="${escapeHtml(w.url)}" loading="lazy" title="${escapeHtml(w.name)}"></iframe>
+      </div>
     </div>
   `).join("");
   return `<div class="d-card"><h2>Beispiele unserer Arbeit</h2><div class="d-portfolio-grid">${frames}</div></div>`;
+}
+function applyPortfolioView(wrapEl, view) {
+  const iframe = wrapEl.querySelector(".d-portfolio-frame");
+  wrapEl.dataset.view = view;
+  if (view === "mobile") {
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
+    iframe.style.transform = "none";
+  } else {
+    const h = wrapEl.clientHeight;
+    const w = wrapEl.clientWidth;
+    const scale = w / PORTFOLIO_DESKTOP_WIDTH;
+    iframe.style.width = PORTFOLIO_DESKTOP_WIDTH + "px";
+    iframe.style.height = (h / scale) + "px";
+    iframe.style.transform = `scale(${scale})`;
+    iframe.style.transformOrigin = "0 0";
+  }
+}
+function wirePortfolioFrames() {
+  document.querySelectorAll(".d-portfolio-item").forEach(itemEl => {
+    const wrapEl = itemEl.querySelector(".d-portfolio-frame-wrap");
+    applyPortfolioView(wrapEl, "desktop");
+    itemEl.querySelectorAll(".d-pt-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        itemEl.querySelectorAll(".d-pt-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        applyPortfolioView(wrapEl, btn.dataset.view);
+      });
+    });
+  });
 }
 
 function dossierFooterHtml() {
@@ -2065,6 +2112,7 @@ function renderDossier() {
   wireDossierMap(item);
   wireRoiCalc();
   wireDossierCrmExtras(item);
+  wirePortfolioFrames();
   updateReachUI(item, false);
 }
 

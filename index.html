@@ -2033,15 +2033,20 @@ function applyPortfolioView(wrapEl, view) {
   if (view === "mobile") {
     iframe.style.width = "100%";
     iframe.style.height = "100%";
+    iframe.style.zoom = 1;
     iframe.style.transform = "none";
   } else {
+    // CSS "zoom" statt "transform: scale()" - transform bricht auf mobilen
+    // Browsern (v.a. iOS Safari) das Touch-Scrollen INNERHALB des Iframes und
+    // kann die Seite zum Abstürzen/Einfrieren bringen. zoom skaliert die
+    // Darstellung genauso, ohne diese Touch-Probleme.
     const h = wrapEl.clientHeight;
     const w = wrapEl.clientWidth;
     const scale = w / PORTFOLIO_DESKTOP_WIDTH;
+    iframe.style.transform = "none";
     iframe.style.width = PORTFOLIO_DESKTOP_WIDTH + "px";
     iframe.style.height = (h / scale) + "px";
-    iframe.style.transform = `scale(${scale})`;
-    iframe.style.transformOrigin = "0 0";
+    iframe.style.zoom = scale;
   }
 }
 function wirePortfolioFrames() {

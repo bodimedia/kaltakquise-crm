@@ -441,18 +441,11 @@
   .d-portfolio-grid { display: flex; flex-direction: column; gap: 16px; }
   .d-portfolio-item { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
   .d-portfolio-label {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
     font-size: 12px; font-weight: 700; color: #111827; padding: 8px 12px;
     background: #f8fafc; border-bottom: 1px solid #e5e7eb;
   }
-  .d-portfolio-toggle { display: flex; gap: 4px; }
-  .d-pt-btn {
-    font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 20px; border: 1px solid #e5e7eb;
-    background: #fff; color: #6b7280; cursor: pointer;
-  }
-  .d-pt-btn.active { background: #2563eb; border-color: #2563eb; color: #fff; }
-  .d-portfolio-frame-wrap { position: relative; width: 100%; height: 440px; overflow: hidden; background: #f3f4f6; -webkit-overflow-scrolling: touch; }
-  .d-portfolio-frame { border: none; display: block; }
+  .d-portfolio-frame-wrap { position: relative; width: 100%; height: 440px; overflow: hidden; background: #f3f4f6; }
+  .d-portfolio-frame { border: none; display: block; width: 100%; height: 100%; }
   .d-portfolio-preview-img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; filter: saturate(0.9); }
   .d-portfolio-play-btn {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -460,16 +453,6 @@
     background: rgba(17,24,39,.82); color: #fff; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,.35);
   }
   .d-portfolio-play-btn:active { background: rgba(17,24,39,.95); }
-  .d-portfolio-pan-btn {
-    position: absolute; top: 50%; transform: translateY(-50%); z-index: 5;
-    width: 38px; height: 38px; border-radius: 50%; border: none;
-    background: rgba(17,24,39,.6); color: #fff; font-size: 16px; font-weight: 700;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-  }
-  .d-portfolio-pan-btn:active { background: rgba(17,24,39,.85); }
-  .d-portfolio-pan-left { left: 8px; }
-  .d-portfolio-pan-right { right: 8px; }
-  .d-portfolio-frame-wrap[data-view="mobile"] .d-portfolio-pan-btn { display: none; }
 
   /* Footer */
   .d-footer {
@@ -1926,15 +1909,13 @@ const PORTFOLIO_WEBSITES = [
   { name: "Homelife Studio", url: "https://www.homelifestudio.at/", preview: "assets/portfolio-previews/homelifestudio.jpg" },
   { name: "Elementkraft Solar", url: "https://www.elementkraft-solar.ch/", preview: "assets/portfolio-previews/elementkraft-solar.jpg" },
 ];
-const PORTFOLIO_DESKTOP_WIDTH = 1440;
 function dossierWebsitesHtml() {
   const items = PORTFOLIO_WEBSITES.map((w, i) => `
     <div class="d-portfolio-item" data-portfolio-idx="${i}">
       <div class="d-portfolio-label">
         <span>${escapeHtml(w.name)}</span>
-        <div class="d-portfolio-toggle"></div>
       </div>
-      <div class="d-portfolio-frame-wrap" data-view="preview">
+      <div class="d-portfolio-frame-wrap">
         <img class="d-portfolio-preview-img" src="${escapeHtml(w.preview)}" loading="lazy" alt="${escapeHtml(w.name)} Vorschau">
         <button type="button" class="d-portfolio-play-btn" data-play="${i}">▶ Ansehen</button>
       </div>
@@ -1942,58 +1923,9 @@ function dossierWebsitesHtml() {
   `).join("");
   return `<div class="d-card"><h2>Beispiele unserer Arbeit</h2><div class="d-portfolio-grid">${items}</div></div>`;
 }
-function applyPortfolioView(wrapEl, view) {
-  const iframe = wrapEl.querySelector(".d-portfolio-frame");
-  if (!iframe) return;
-  wrapEl.dataset.view = view;
-  if (view === "mobile") {
-    wrapEl.style.overflowX = "hidden";
-    iframe.style.width = "100%";
-    iframe.style.height = "100%";
-  } else {
-    // "Desktop erzwingen" per natürlichem Scrollen statt transform/zoom-Tricks:
-    // das Iframe bekommt seine echte 1440px-Breite (löst beim Betrieb die
-    // richtigen Desktop-Media-Queries aus), der Wrapper scrollt horizontal
-    // ganz normal per Touch/Wischen. transform:scale() bricht auf iOS Safari
-    // das Scrollen im Iframe (kann zum Einfrieren/Absturz führen), zoom
-    // verändert die vom Iframe wahrgenommene Viewport-Breite fälschlich -
-    // beides vermeiden wir hier komplett.
-    wrapEl.style.overflowX = "auto";
-    iframe.style.width = PORTFOLIO_DESKTOP_WIDTH + "px";
-    iframe.style.height = "100%";
-  }
-}
 function startPortfolioFrame(itemEl, w) {
   const wrapEl = itemEl.querySelector(".d-portfolio-frame-wrap");
-  wrapEl.innerHTML = `
-    <iframe class="d-portfolio-frame" src="${escapeHtml(w.url)}" title="${escapeHtml(w.name)}"></iframe>
-    <button type="button" class="d-portfolio-pan-btn d-portfolio-pan-left" aria-label="Nach links">‹</button>
-    <button type="button" class="d-portfolio-pan-btn d-portfolio-pan-right" aria-label="Nach rechts">›</button>
-  `;
-  // Ein Iframe füllt den kompletten Wrapper aus (auch über dessen Breite hinaus per
-  // overflow-x), deshalb landen Touch-Wischgesten IMMER auf dem Iframe selbst und
-  // erreichen nie den scrollbaren Wrapper darunter - Wischen zum seitlichen Scrollen
-  // funktioniert auf dem Handy also nicht. Pfeil-Buttons scrollen den Wrapper deshalb
-  // programmatisch (per Klick, außerhalb der Iframe-Fläche liegend).
-  wrapEl.querySelector(".d-portfolio-pan-left").addEventListener("click", () => {
-    wrapEl.scrollBy({ left: -360, behavior: "smooth" });
-  });
-  wrapEl.querySelector(".d-portfolio-pan-right").addEventListener("click", () => {
-    wrapEl.scrollBy({ left: 360, behavior: "smooth" });
-  });
-  const toggleEl = itemEl.querySelector(".d-portfolio-toggle");
-  toggleEl.innerHTML = `
-    <button type="button" class="d-pt-btn active" data-view="desktop">🖥️ Desktop</button>
-    <button type="button" class="d-pt-btn" data-view="mobile">📱 Mobile</button>
-  `;
-  applyPortfolioView(wrapEl, "desktop");
-  toggleEl.querySelectorAll(".d-pt-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      toggleEl.querySelectorAll(".d-pt-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      applyPortfolioView(wrapEl, btn.dataset.view);
-    });
-  });
+  wrapEl.innerHTML = `<iframe class="d-portfolio-frame" src="${escapeHtml(w.url)}" title="${escapeHtml(w.name)}"></iframe>`;
 }
 function wirePortfolioFrames() {
   document.querySelectorAll("[data-play]").forEach(btn => {

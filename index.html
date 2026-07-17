@@ -450,6 +450,13 @@
   .d-step-text b { display: block; font-size: 13.5px; color: #111827; margin-bottom: 1px; }
   .d-step-text span { font-size: 12.5px; color: #6b7280; line-height: 1.4; }
 
+  /* Erfolgreiche Anzeigen-Beispiele (Ad-Creatives, immer nebeneinander/horizontal) */
+  .d-adcreatives-row { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 8px; }
+  .d-adcreative-img {
+    width: 33.333%; height: auto; display: block; border-radius: 8px; border: 1px solid #e5e7eb;
+    object-fit: cover;
+  }
+
   /* Beispiele unserer Arbeit (eingebettete Kunden-Webseiten) */
   .d-portfolio-grid { display: flex; flex-direction: column; gap: 16px; }
   .d-portfolio-item { border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
@@ -1985,6 +1992,18 @@ function dossierVorgehenHtml() {
   return `<div class="d-card"><h2>So gehen wir vor</h2><ol class="d-steps">${items}</ol></div>`;
 }
 
+const AD_CREATIVES = [
+  { name: "Elementkraft Terrasse", url: "assets/adcreatives/adcreative-elementkraft.jpg" },
+  { name: "Elementkraft Solar", url: "assets/adcreatives/adcreative-elementkraft_solar.jpg" },
+  { name: "WoodenTec", url: "assets/adcreatives/adcreative-woodentec.jpg" },
+];
+function dossierAdCreativesHtml() {
+  const imgs = AD_CREATIVES.map(c => `
+    <img class="d-adcreative-img" src="${escapeHtml(c.url)}" loading="lazy" alt="${escapeHtml(c.name)}">
+  `).join("");
+  return `<div class="d-card"><h2>Erfolgreiche Anzeigen-Beispiele</h2><div class="d-adcreatives-row">${imgs}</div></div>`;
+}
+
 const PORTFOLIO_WEBSITES = [
   { name: "Elementkraft", url: "https://www.elementkraft.swiss/" },
   { name: "Homelife Studio", url: "https://www.homelifestudio.at/" },
@@ -2102,6 +2121,7 @@ function renderDossier() {
     dossierVorbildHtml(item),
     roiCalcHtml(),
     dossierVorgehenHtml(),
+    dossierAdCreativesHtml(),
     dossierWebsitesHtml(),
     `</div>`,
     dossierFooterHtml(),

@@ -132,9 +132,9 @@
   }
   .route-toggle-btn.in-route { background: #ef7a44; color: #0f1c28; }
   .route-num-badge {
-    background: #ef7a44; color: #0f1c28; border-radius: 50%; width: 22px; height: 22px;
-    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 11px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.5); border: 2px solid #fff;
+    background: #ef7a44; color: #0f1c28; border-radius: 50%; width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px;
+    box-shadow: 0 1px 5px rgba(0,0,0,.55); border: 2.5px solid #fff;
   }
   .status-icon-badge {
     width: 17px; height: 17px; border-radius: 50%; color: #fff; font-weight: 900; font-size: 11px;
@@ -985,6 +985,12 @@ legend.addTo(map);
 const markersLayer = L.layerGroup().addTo(map);
 const markerById = {};
 
+// Touchgeräte bekommen größere Kreise als Tippziele - Desktop bleibt kompakter
+// für die Übersicht bei vielen Markern gleichzeitig.
+const IS_TOUCH_DEVICE = window.matchMedia("(pointer: coarse)").matches;
+const MARKER_RADIUS_A = IS_TOUCH_DEVICE ? 13 : 9;
+const MARKER_RADIUS_B = IS_TOUCH_DEVICE ? 10 : 6;
+
 function escapeHtml(s) {
   if (!s) return "";
   return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -1112,7 +1118,7 @@ function updateTopBadges(item) {
   if (st.musterkonkurrent) badges.push({ emoji: "👑", cls: "muster-crown-badge", title: "Musterkonkurrent" });
   if (st.traumkunde) badges.push({ emoji: "🚀", cls: "traumkunde-badge", title: "Traumkunde" });
   if (!badges.length) return;
-  const radius = item.ab === "A" ? 9 : 6;
+  const radius = item.ab === "A" ? MARKER_RADIUS_A : MARKER_RADIUS_B;
   const spacing = 15;
   const markers = [];
   badges.forEach((b, i) => {
@@ -1141,7 +1147,7 @@ function buildMarkers() {
     const st = getEntry(item.id);
     const isClosed = st.status === "closed";
     const marker = L.circleMarker([item.lat, item.lng], {
-      radius: isA ? 9 : 6,
+      radius: isA ? MARKER_RADIUS_A : MARKER_RADIUS_B,
       fillColor: colorFor(item),
       color: isClosed ? "#16a34a" : (isA ? "#FFD700" : "#1f2937"),
       weight: isA || isClosed ? 3 : 1,

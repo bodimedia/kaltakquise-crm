@@ -399,11 +399,6 @@
   .d-vorbild-site a { font-size: 12px; color: #2563eb; text-decoration: none; }
   .d-vorbild-site a:hover { text-decoration: underline; }
 
-  .d-marktfuehrer-badge {
-    display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .03em; color: #d97706; background: rgba(217,119,6,.12); padding: 2px 8px; border-radius: 20px;
-  }
-
   /* Rechner "Ihr Potenzial" */
   .d-calc-row { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid #f0f1f3; }
   .d-calc-row:last-of-type { border-bottom: none; }
@@ -471,8 +466,15 @@
     background: #fff; color: #6b7280; cursor: pointer;
   }
   .d-pt-btn.active { background: #2563eb; border-color: #2563eb; color: #fff; }
-  .d-portfolio-frame-wrap { position: relative; width: 100%; height: 440px; overflow: hidden; }
+  .d-portfolio-frame-wrap { position: relative; width: 100%; height: 440px; overflow: hidden; background: #f3f4f6; }
   .d-portfolio-frame { border: none; display: block; }
+  .d-portfolio-preview-img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; filter: saturate(0.9); }
+  .d-portfolio-play-btn {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 14px; font-weight: 700; padding: 12px 22px; border-radius: 30px; border: none;
+    background: rgba(17,24,39,.82); color: #fff; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,.35);
+  }
+  .d-portfolio-play-btn:active { background: rgba(17,24,39,.95); }
 
   /* Footer */
   .d-footer {
@@ -1819,8 +1821,8 @@ function platzhirschCardHtml(p) {
   const ratingText = `${(p.rating || 0).toFixed(1).replace(".", ",")} ★ · ${p.user_rating_count} Google-Bewertungen`;
   return `
     <div class="d-vorbild-card">
-      <div class="d-vorbild-name">${escapeHtml(p.Name)} <span class="d-marktfuehrer-badge">Marktführer der Region</span></div>
-      <div class="d-vorbild-why">${ratingText} — eines der etabliertesten Unternehmen der Region, echte Zahl direkt von Google (kein Web-Recherche-Beispiel). Ob aktuell Google/Meta Ads laufen, bitte manuell prüfen:
+      <div class="d-vorbild-name">${escapeHtml(p.Name)}</div>
+      <div class="d-vorbild-why">${ratingText} — echte Zahl direkt von Google (kein Web-Recherche-Beispiel). Ob aktuell Google/Meta Ads laufen, bitte manuell prüfen:
         <a href="${metaAdsLibraryLink(p.Name)}" target="_blank" rel="noopener">Meta Ads Library</a>
       </div>
     </div>
@@ -2005,60 +2007,70 @@ function dossierAdCreativesHtml() {
 }
 
 const PORTFOLIO_WEBSITES = [
-  { name: "Elementkraft", url: "https://www.elementkraft.swiss/" },
-  { name: "Homelife Studio", url: "https://www.homelifestudio.at/" },
-  { name: "Elementkraft Solar", url: "https://www.elementkraft-solar.ch/" },
+  { name: "Elementkraft", url: "https://www.elementkraft.swiss/", preview: "assets/portfolio-previews/elementkraft.jpg" },
+  { name: "Homelife Studio", url: "https://www.homelifestudio.at/", preview: "assets/portfolio-previews/homelifestudio.jpg" },
+  { name: "Elementkraft Solar", url: "https://www.elementkraft-solar.ch/", preview: "assets/portfolio-previews/elementkraft-solar.jpg" },
 ];
 const PORTFOLIO_DESKTOP_WIDTH = 1440;
 function dossierWebsitesHtml() {
-  const frames = PORTFOLIO_WEBSITES.map((w, i) => `
+  const items = PORTFOLIO_WEBSITES.map((w, i) => `
     <div class="d-portfolio-item" data-portfolio-idx="${i}">
       <div class="d-portfolio-label">
         <span>${escapeHtml(w.name)}</span>
-        <div class="d-portfolio-toggle">
-          <button type="button" class="d-pt-btn active" data-view="desktop">🖥️ Desktop</button>
-          <button type="button" class="d-pt-btn" data-view="mobile">📱 Mobile</button>
-        </div>
+        <div class="d-portfolio-toggle"></div>
       </div>
-      <div class="d-portfolio-frame-wrap" data-view="desktop">
-        <iframe class="d-portfolio-frame" src="${escapeHtml(w.url)}" loading="lazy" title="${escapeHtml(w.name)}"></iframe>
+      <div class="d-portfolio-frame-wrap" data-view="preview">
+        <img class="d-portfolio-preview-img" src="${escapeHtml(w.preview)}" loading="lazy" alt="${escapeHtml(w.name)} Vorschau">
+        <button type="button" class="d-portfolio-play-btn" data-play="${i}">▶ Ansehen</button>
       </div>
     </div>
   `).join("");
-  return `<div class="d-card"><h2>Beispiele unserer Arbeit</h2><div class="d-portfolio-grid">${frames}</div></div>`;
+  return `<div class="d-card"><h2>Beispiele unserer Arbeit</h2><div class="d-portfolio-grid">${items}</div></div>`;
 }
 function applyPortfolioView(wrapEl, view) {
   const iframe = wrapEl.querySelector(".d-portfolio-frame");
+  if (!iframe) return;
   wrapEl.dataset.view = view;
   if (view === "mobile") {
+    wrapEl.style.overflowX = "hidden";
     iframe.style.width = "100%";
     iframe.style.height = "100%";
-    iframe.style.zoom = 1;
-    iframe.style.transform = "none";
   } else {
-    // CSS "zoom" statt "transform: scale()" - transform bricht auf mobilen
-    // Browsern (v.a. iOS Safari) das Touch-Scrollen INNERHALB des Iframes und
-    // kann die Seite zum Abstürzen/Einfrieren bringen. zoom skaliert die
-    // Darstellung genauso, ohne diese Touch-Probleme.
-    const h = wrapEl.clientHeight;
-    const w = wrapEl.clientWidth;
-    const scale = w / PORTFOLIO_DESKTOP_WIDTH;
-    iframe.style.transform = "none";
+    // "Desktop erzwingen" per natürlichem Scrollen statt transform/zoom-Tricks:
+    // das Iframe bekommt seine echte 1440px-Breite (löst beim Betrieb die
+    // richtigen Desktop-Media-Queries aus), der Wrapper scrollt horizontal
+    // ganz normal per Touch/Wischen. transform:scale() bricht auf iOS Safari
+    // das Scrollen im Iframe (kann zum Einfrieren/Absturz führen), zoom
+    // verändert die vom Iframe wahrgenommene Viewport-Breite fälschlich -
+    // beides vermeiden wir hier komplett.
+    wrapEl.style.overflowX = "auto";
     iframe.style.width = PORTFOLIO_DESKTOP_WIDTH + "px";
-    iframe.style.height = (h / scale) + "px";
-    iframe.style.zoom = scale;
+    iframe.style.height = "100%";
   }
 }
+function startPortfolioFrame(itemEl, w) {
+  const wrapEl = itemEl.querySelector(".d-portfolio-frame-wrap");
+  wrapEl.innerHTML = `<iframe class="d-portfolio-frame" src="${escapeHtml(w.url)}" title="${escapeHtml(w.name)}"></iframe>`;
+  const toggleEl = itemEl.querySelector(".d-portfolio-toggle");
+  toggleEl.innerHTML = `
+    <button type="button" class="d-pt-btn active" data-view="desktop">🖥️ Desktop</button>
+    <button type="button" class="d-pt-btn" data-view="mobile">📱 Mobile</button>
+  `;
+  applyPortfolioView(wrapEl, "desktop");
+  toggleEl.querySelectorAll(".d-pt-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      toggleEl.querySelectorAll(".d-pt-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      applyPortfolioView(wrapEl, btn.dataset.view);
+    });
+  });
+}
 function wirePortfolioFrames() {
-  document.querySelectorAll(".d-portfolio-item").forEach(itemEl => {
-    const wrapEl = itemEl.querySelector(".d-portfolio-frame-wrap");
-    applyPortfolioView(wrapEl, "desktop");
-    itemEl.querySelectorAll(".d-pt-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        itemEl.querySelectorAll(".d-pt-btn").forEach(b => b.classList.remove("active"));
-        btn.classList.add("active");
-        applyPortfolioView(wrapEl, btn.dataset.view);
-      });
+  document.querySelectorAll("[data-play]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.play, 10);
+      const itemEl = btn.closest(".d-portfolio-item");
+      startPortfolioFrame(itemEl, PORTFOLIO_WEBSITES[idx]);
     });
   });
 }
@@ -2154,8 +2166,27 @@ function radiusToZoom(km) {
   if (km <= 35) return 9;
   return 8;
 }
+function competitorsInRadius(item, radiusKm) {
+  return DATA.filter(d => d.kategorie === item.kategorie && d.id !== item.id && d.lat && d.lng)
+    .map(d => Object.assign({}, d, { _dist: haversineKm(item.lat, item.lng, d.lat, d.lng) }))
+    .filter(d => d._dist <= radiusKm);
+}
+let competitorMarkers = [];
+function updateCompetitorMarkers(item, radiusKm) {
+  competitorMarkers.forEach(m => dossierMap && dossierMap.removeLayer(m));
+  competitorMarkers = [];
+  if (!dossierMap) return;
+  competitorsInRadius(item, radiusKm).forEach(c => {
+    const marker = L.circleMarker([c.lat, c.lng], {
+      radius: 8, color: "#fff", weight: 2, fillColor: "#f97316", fillOpacity: 1,
+    }).addTo(dossierMap);
+    marker.bindTooltip(escapeHtml(c.name), { direction: "top", offset: [0, -6], className: "d-map-pin-label" });
+    competitorMarkers.push(marker);
+  });
+}
 function wireDossierMap(item) {
   if (dossierMap) { dossierMap.remove(); dossierMap = null; }
+  competitorMarkers = [];
   if (!item.lat || !item.lng) return;
   dossierMap = L.map("d-map", {
     zoomControl: false, attributionControl: false, dragging: true, scrollWheelZoom: true,
@@ -2170,6 +2201,7 @@ function wireDossierMap(item) {
     radius: dossierRadiusKm * 1000, color: "#2563eb", weight: 2, fillColor: "#2563eb", fillOpacity: 0.12,
   }).addTo(dossierMap);
   fitDossierMap();
+  updateCompetitorMarkers(item, dossierRadiusKm);
 
   const slider = document.getElementById("d-radius-slider");
   const num = document.getElementById("d-radius-num");
@@ -2199,6 +2231,7 @@ function setDossierRadius(item, km, animate) {
   if (!animate) {
     if (dossierMapCircle) dossierMapCircle.setRadius(km * 1000);
     updateReachUI(item, false);
+    updateCompetitorMarkers(item, km);
     return;
   }
   const start = performance.now(), duration = 280;
@@ -2209,7 +2242,7 @@ function setDossierRadius(item, km, animate) {
     if (dossierMapCircle) dossierMapCircle.setRadius(cur * 1000);
     updateReachUI(item, true, cur);
     if (t < 1) radiusAnimHandle = requestAnimationFrame(step);
-    else { updateReachUI(item, false); }
+    else { updateReachUI(item, false); updateCompetitorMarkers(item, km); }
   }
   radiusAnimHandle = requestAnimationFrame(step);
 }

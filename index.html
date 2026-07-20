@@ -952,7 +952,8 @@ legend.onAdd = function () {
     `<div class="legend-cat-list">${catListHtml}</div>` +
     `<hr style='margin:4px 0'><label class="legend-cat-row"><input type="checkbox" id="f-muster-only"> 👑 Nur Musterkonkurrenten (der ausgewählten Branchen) zeigen</label>` +
     `<label class="legend-cat-row"><input type="checkbox" id="f-traum-only"> 🚀 Nur Traumkunden (der ausgewählten Branchen) zeigen</label>` +
-    `<label class="legend-cat-row"><input type="checkbox" id="f-hide-nicht-relevant"> ✕ Nicht relevante ausblenden</label>`;
+    `<label class="legend-cat-row"><input type="checkbox" id="f-hide-nicht-relevant"> ✕ Nicht relevante ausblenden</label>` +
+    `<label class="legend-cat-row"><input type="checkbox" id="f-hide-eu"> 🚫 e.U. ausblenden</label>`;
   div.innerHTML = `
     <div class="legend-head"><span>Legende / Kategorien</span><span class="legend-arrow">▾</span></div>
     <div class="legend-body">${bodyHtml}</div>
@@ -980,6 +981,7 @@ legend.onAdd = function () {
   div.querySelector("#f-muster-only").addEventListener("change", () => buildMarkers());
   div.querySelector("#f-traum-only").addEventListener("change", () => buildMarkers());
   div.querySelector("#f-hide-nicht-relevant").addEventListener("change", () => buildMarkers());
+  div.querySelector("#f-hide-eu").addEventListener("change", () => buildMarkers());
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
   return div;
@@ -1305,6 +1307,9 @@ function currentFilter(id) {
   return document.getElementById(id).value;
 }
 
+function isEinzelunternehmen(name) {
+  return (name || "").split(/\s+/).some(tok => tok.replace(/[^A-Za-z.]/g, "").replace(/\./g, "").toLowerCase() === "eu");
+}
 function applyFilters(data) {
   const gebiet = currentFilter("f-gebiet");
   const kategorie = currentFilter("f-kategorie");
@@ -1323,6 +1328,8 @@ function applyFilters(data) {
     if (traumOnlyEl && traumOnlyEl.checked && !getEntry(item.id).traumkunde) return false;
     const hideNichtRelevantEl = document.getElementById("f-hide-nicht-relevant");
     if (hideNichtRelevantEl && hideNichtRelevantEl.checked && getEntry(item.id).status === "nicht_relevant") return false;
+    const hideEuEl = document.getElementById("f-hide-eu");
+    if (hideEuEl && hideEuEl.checked && isEinzelunternehmen(item.name)) return false;
     if (b2c && item.b2c_b2b !== b2c) return false;
     if (ab && item.ab !== ab) return false;
     if (status && getEntry(item.id).status !== status) return false;

@@ -490,6 +490,14 @@
     width: 100%; font-family: inherit; font-size: 13px; padding: 8px 10px; border-radius: 8px;
     border: 1px solid #e5e7eb; background: transparent; color: #111827; resize: vertical; min-height: 60px; box-sizing: border-box;
   }
+  .d-input {
+    width: 100%; font-family: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid #e5e7eb; background: transparent; color: #111827; box-sizing: border-box;
+  }
+  .d-name-hint { font-size: 11px; color: #9ca3af; margin-top: 6px; line-height: 1.4; }
+  .d-besucht-am { font-size: 12px; color: #0ea5e9; font-weight: 600; margin: -2px 0 8px; }
+  .d-besucht-am:empty, .d-notiz-am:empty { display: none; }
+  .d-notiz-am { font-size: 11px; color: #9ca3af; margin-top: 6px; }
   .d-crm-section { border-top: 2px dashed #e5e7eb; margin-top: 4px; padding-top: 20px; }
   .d-crm-section-label {
     font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; font-weight: 700; margin-bottom: 10px;
@@ -730,6 +738,9 @@ function fbWriteLeadState(id, entry) {
     status: entry.status || "offen",
     notiz: entry.notiz || "",
     website_override: entry.website_override || "",
+    name_override: entry.name_override || "",
+    besucht_am: entry.besucht_am == null ? null : entry.besucht_am,
+    notiz_am: entry.notiz_am == null ? null : entry.notiz_am,
     musterkonkurrent: !!entry.musterkonkurrent,
     traumkunde: !!entry.traumkunde,
     einwand_tags: entry.einwand_tags || [],
@@ -830,9 +841,12 @@ function saveState(state) {
 let state = loadState();
 
 function getEntry(id) {
-  if (!state[id]) state[id] = { status: "offen", notiz: "", website_override: "", musterkonkurrent: false, traumkunde: false, einwand_tags: [], skala_wert: null, folgetermin: null };
+  if (!state[id]) state[id] = { status: "offen", notiz: "", website_override: "", name_override: "", besucht_am: null, notiz_am: null, musterkonkurrent: false, traumkunde: false, einwand_tags: [], skala_wert: null, folgetermin: null };
   if (state[id].status === undefined) state[id].status = state[id].besucht ? "besucht_kein_interesse" : "offen";
   if (state[id].website_override === undefined) state[id].website_override = "";
+  if (state[id].name_override === undefined) state[id].name_override = "";
+  if (state[id].besucht_am === undefined) state[id].besucht_am = null;
+  if (state[id].notiz_am === undefined) state[id].notiz_am = null;
   if (state[id].musterkonkurrent === undefined) state[id].musterkonkurrent = false;
   if (state[id].traumkunde === undefined) state[id].traumkunde = false;
   if (!Array.isArray(state[id].einwand_tags)) state[id].einwand_tags = [];
@@ -845,9 +859,24 @@ function effectiveWebsite(item) {
   if (st.website_override) return "ja: " + st.website_override;
   return item.website;
 }
+// Korrigierter Firmenname NUR für die Analyse (Dossier) - ändert nicht die Karte/DB.
+function effectiveName(item) {
+  const st = getEntry(item.id);
+  return (st.name_override && st.name_override.trim()) ? st.name_override.trim() : item.name;
+}
+function formatDateTime(ts) {
+  if (!ts) return "";
+  return new Date(ts).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 function setStatus(id, value) {
   const st = getEntry(id);
+  const wasBesucht = /^besucht/.test(st.status || "");
+  const isBesucht = /^besucht/.test(value);
   st.status = value;
+  // Besuchszeitpunkt festhalten, sobald ein "Besucht"-Status gesetzt wird (nur beim
+  // ersten Übergang von nicht-besucht -> besucht, damit ein späteres Umkategorisieren
+  // des Besuchs das ursprüngliche Datum nicht überschreibt).
+  if (isBesucht && (!wasBesucht || !st.besucht_am)) st.besucht_am = Date.now();
   saveState(state);
   fbWriteLeadState(id, st);
 }
@@ -1753,7 +1782,7 @@ function dossierKopfHtml(item) {
   const today = new Date().toLocaleDateString("de-AT", { day: "2-digit", month: "long", year: "numeric" });
   return `
     <div class="d-kopf">
-      <h1>Markt-Analyse für ${escapeHtml(item.name)}</h1>
+      <h1 id="d-kopf-title">Markt-Analyse für ${escapeHtml(effectiveName(item))}</h1>
       <p class="d-meta">erstellt von bodi.media · ${today}</p>
       <p class="d-desc">Diese Analyse zeigt Ihnen das regionale Potenzial, den Wettbewerb und realistische Umsatzchancen mit Meta Ads und Google Ads.</p>
     </div>
@@ -2000,9 +2029,17 @@ function dossierCrmExtrasHtml(item) {
     <div class="d-crm-section" data-crm-only>
       <div class="d-crm-section-label">Nur für dich sichtbar (CRM-intern)</div>
       <div class="d-card" style="margin-bottom:12px;">
+        <h2>Firmenname für die Analyse</h2>
+        <input type="text" class="d-input" id="d-name-override" placeholder="${escapeHtml(item.name)}" value="${escapeHtml(st.name_override || "")}">
+        <div class="d-name-hint">Korrigiert nur den Namen in dieser Analyse – nicht auf der Karte oder in der Datenbank. Leer lassen = Originalname.</div>
+        <button class="d-mini-btn" type="button" id="d-name-save" style="margin-top:8px;">Name übernehmen</button>
+      </div>
+      <div class="d-card" style="margin-bottom:12px;">
         <h2>Status &amp; interne Notizen</h2>
         <div class="row" style="margin-bottom:10px;"><b>Status:</b> ${statusSelectHtml(item.id, "status-select-dossier")}</div>
+        <div class="d-besucht-am" id="d-besucht-am">${st.besucht_am ? "🕑 Besucht am " + escapeHtml(formatDateTime(st.besucht_am)) : ""}</div>
         <textarea class="d-textarea" id="d-notiz-text" placeholder="Notiz ...">${escapeHtml(st.notiz)}</textarea>
+        <div class="d-notiz-am" id="d-notiz-am">${st.notiz_am ? "Notiz zuletzt gespeichert: " + escapeHtml(formatDateTime(st.notiz_am)) : ""}</div>
         <button class="d-mini-btn" type="button" id="d-notiz-save" style="margin-top:8px;">Notiz speichern</button>
       </div>
       <div class="d-card" style="margin-bottom:12px;">
@@ -2094,7 +2131,7 @@ function wireDossierMap(item) {
   }).setView([item.lat, item.lng], radiusToZoom(dossierRadiusKm));
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(dossierMap);
   dossierMapMarker = L.marker([item.lat, item.lng]).addTo(dossierMap);
-  dossierMapMarker.bindTooltip(`<b>${escapeHtml(item.name)}</b>`, {
+  dossierMapMarker.bindTooltip(`<b>${escapeHtml(effectiveName(item))}</b>`, {
     permanent: true, direction: "bottom", offset: [0, 12], className: "d-map-pin-label",
   }).openTooltip();
   dossierMapCircle = L.circle([item.lat, item.lng], {
@@ -2159,6 +2196,20 @@ function updateReachUI(item, mid, radiusOverride) {
 }
 
 function wireDossierCrmExtras(item) {
+  const nameSave = document.getElementById("d-name-save");
+  if (nameSave) {
+    nameSave.addEventListener("click", () => {
+      const st = getEntry(item.id);
+      st.name_override = document.getElementById("d-name-override").value.trim();
+      saveState(state);
+      fbWriteLeadState(item.id, st);
+      const title = document.getElementById("d-kopf-title");
+      if (title) title.textContent = "Markt-Analyse für " + effectiveName(item);
+      if (dossierMapMarker) dossierMapMarker.setTooltipContent(`<b>${escapeHtml(effectiveName(item))}</b>`);
+      nameSave.textContent = "Übernommen ✓";
+      setTimeout(() => nameSave.textContent = "Name übernehmen", 1200);
+    });
+  }
   const statusSel = document.querySelector(".status-select-dossier");
   if (statusSel) {
     statusSel.addEventListener("change", () => {
@@ -2166,6 +2217,11 @@ function wireDossierCrmExtras(item) {
       const marker = markerById[item.id];
       if (marker) marker.setStyle({ fillColor: colorFor(item) });
       updateStatusIcon(item);
+      const besuchtAmEl = document.getElementById("d-besucht-am");
+      if (besuchtAmEl) {
+        const st = getEntry(item.id);
+        besuchtAmEl.textContent = st.besucht_am ? "🕑 Besucht am " + formatDateTime(st.besucht_am) : "";
+      }
     });
   }
   const notizSave = document.getElementById("d-notiz-save");
@@ -2173,8 +2229,11 @@ function wireDossierCrmExtras(item) {
     notizSave.addEventListener("click", () => {
       const st = getEntry(item.id);
       st.notiz = document.getElementById("d-notiz-text").value;
+      st.notiz_am = Date.now();
       saveState(state);
       fbWriteLeadState(item.id, st);
+      const notizAmEl = document.getElementById("d-notiz-am");
+      if (notizAmEl) notizAmEl.textContent = "Notiz zuletzt gespeichert: " + formatDateTime(st.notiz_am);
       notizSave.textContent = "Gespeichert ✓";
       setTimeout(() => notizSave.textContent = "Notiz speichern", 1200);
     });

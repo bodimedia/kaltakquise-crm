@@ -86,13 +86,21 @@
   .legend-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; font-weight: 700; flex: 0 0 auto; }
   .legend-arrow { transition: transform .15s; }
   .legend.collapsed .legend-arrow { transform: rotate(-90deg); }
-  .legend-body { margin-top: 6px; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
-  .legend-cat-list { overflow-y: auto; flex: 1 1 auto; min-height: 40px; }
+  /* Der komplette Legenden-Inhalt (inkl. der Optionen ganz unten wie "Nur A-Leads")
+     scrollt als EIN Container - so ist bei niedrigem Bildschirm garantiert alles
+     erreichbar, statt dass nur die Kategorienliste scrollt und die Optionen darunter
+     abgeschnitten werden. */
+  .legend-body { margin-top: 6px; display: block; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .legend-cat-list { overflow: visible; }
   .legend.collapsed .legend-body { display: none; }
   .legend.collapsed { padding-bottom: 8px; max-height: none; }
-  /* Auf dem Handy die unten-links verankerten Leaflet-Controls (Legende) über die
-     Safe-Area (Home-Indikator) heben, damit die Legende antippbar bleibt. */
-  .leaflet-bottom.leaflet-left { margin-bottom: env(safe-area-inset-bottom, 0px); }
+  /* Auf dem Handy sitzt die Legende oben rechts und wächst nach unten. Höhe so
+     begrenzen, dass sie samt Topbar sicher in den sichtbaren Bereich passt (die
+     Topbar kann auf schmalen Handys mehrzeilig umbrechen). Innerhalb scrollt der
+     Inhalt, sodass alle Optionen erreichbar bleiben. */
+  @media (max-width: 640px) {
+    .legend { max-height: calc(100dvh - 160px); }
+  }
 
   .popup-box { font-size: 13px; width: 300px; max-width: 80vw; line-height: 1.45; }
   .leaflet-popup-content { margin: 12px 14px; }

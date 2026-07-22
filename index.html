@@ -1829,7 +1829,7 @@ function roiCalcHtml() {
       <h2>Ihr Potenzial</h2>
       <div class="d-calc-row">
         <div class="d-calc-icon">💰</div>
-        <div class="d-calc-label-wrap"><div class="d-calc-label">Werbebudget pro Tag (€)</div><div class="d-calc-sub">🔒 manuell festlegen</div></div>
+        <div class="d-calc-label-wrap"><div class="d-calc-label">Werbebudget pro Tag (€)</div><div class="d-calc-sub">ergibt sich aus Ihrem Ziel (oder frei einstellbar)</div></div>
         <div class="d-calc-stepper">
           <button class="d-step-btn" type="button" data-step-minus="roi2-budget">−</button>
           <div class="d-calc-value-wrap"><input type="number" id="roi2-budget" value="40"><span class="d-unit">€</span></div>
@@ -1838,7 +1838,7 @@ function roiCalcHtml() {
       </div>
       <div class="d-calc-row">
         <div class="d-calc-icon">🎯</div>
-        <div class="d-calc-label-wrap"><div class="d-calc-label">Kosten pro Anfrage (€)</div></div>
+        <div class="d-calc-label-wrap"><div class="d-calc-label">Kosten pro Anfrage (€)</div><div class="d-calc-sub">🔒 Marktwert (fix)</div></div>
         <div class="d-calc-stepper">
           <button class="d-step-btn" type="button" data-step-minus="roi2-cpl">−</button>
           <div class="d-calc-value-wrap"><input type="number" id="roi2-cpl" value="40"><span class="d-unit">€</span></div>
@@ -1847,7 +1847,7 @@ function roiCalcHtml() {
       </div>
       <div class="d-calc-row">
         <div class="d-calc-icon">%</div>
-        <div class="d-calc-label-wrap"><div class="d-calc-label">Abschlussquote (%)</div></div>
+        <div class="d-calc-label-wrap"><div class="d-calc-label">Abschlussquote (%)</div><div class="d-calc-sub">🔒 Erfahrungswert (fix)</div></div>
         <div class="d-calc-stepper">
           <button class="d-step-btn" type="button" data-step-minus="roi2-quote">−</button>
           <div class="d-calc-value-wrap"><input type="number" id="roi2-quote" value="20"><span class="d-unit">%</span></div>
@@ -1912,10 +1912,12 @@ function roiForward() {
   updateRoiNebenrechnung(anfragen);
 }
 function roiReverseFromNeukunden() {
-  const budget = getNum("roi2-budget"), quote = getNum("roi2-quote"), auftragswert = getNum("roi2-auftragswert"), neukunden = getNum("roi2-neukunden");
+  // Kosten pro Anfrage (Marktwert) und Abschlussquote (Erfahrungswert) sind fix.
+  // Wenn das Ziel (Neukunden/Monat) steigt, muss das BUDGET steigen - nicht der CPL.
+  const cpl = getNum("roi2-cpl"), quote = getNum("roi2-quote"), auftragswert = getNum("roi2-auftragswert"), neukunden = getNum("roi2-neukunden");
   const benoetigteAnfragen = quote > 0 ? neukunden / (quote / 100) : 0;
-  const cpl = benoetigteAnfragen > 0 ? (budget * 30) / benoetigteAnfragen : 0;
-  setNum("roi2-cpl", cpl, false);
+  const budgetProTag = (benoetigteAnfragen > 0 && cpl > 0) ? (benoetigteAnfragen * cpl) / 30 : 0;
+  setNum("roi2-budget", budgetProTag, false);
   setNum("roi2-umsatz", neukunden * auftragswert, false);
   updateRoiNebenrechnung(benoetigteAnfragen);
 }

@@ -934,13 +934,17 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-const legend = L.control({ position: "bottomleft" });
+// Auf dem Handy oben-rechts platzieren: dort wächst die aufgeklappte Legende nach
+// UNTEN, der Kopf (Zuklapp-Schalter) bleibt oben sichtbar und antippbar. Unten-links
+// (Desktop) würde sie beim Aufklappen nach oben wachsen und der Kopf würde am oberen
+// Kartenrand abgeschnitten -> ließe sich nicht mehr zuklappen.
+const IS_MOBILE_LAYOUT = window.innerWidth <= 640;
+const legend = L.control({ position: IS_MOBILE_LAYOUT ? "topright" : "bottomleft" });
 const hiddenCategories = new Set();
 
 legend.onAdd = function () {
   const div = L.DomUtil.create("div", "legend");
-  const startCollapsed = window.innerWidth <= 640;
-  if (startCollapsed) div.classList.add("collapsed");
+  if (IS_MOBILE_LAYOUT) div.classList.add("collapsed");
   let catListHtml = "";
   Object.entries(CATEGORY_COLORS).forEach(([cat, color]) => {
     catListHtml += `<label class="legend-cat-row"><input type="checkbox" class="legend-cat-cb" data-cat="${escapeHtml(cat)}" checked>` +

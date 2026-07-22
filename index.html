@@ -90,17 +90,14 @@
      scrollt als EIN Container - so ist bei niedrigem Bildschirm garantiert alles
      erreichbar, statt dass nur die Kategorienliste scrollt und die Optionen darunter
      abgeschnitten werden. */
-  .legend-body { margin-top: 6px; display: block; flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .legend-body {
+    margin-top: 6px; display: block; flex: 1 1 auto; min-height: 0;
+    overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    padding-bottom: 10px;
+  }
   .legend-cat-list { overflow: visible; }
   .legend.collapsed .legend-body { display: none; }
   .legend.collapsed { padding-bottom: 8px; max-height: none; }
-  /* Auf dem Handy sitzt die Legende oben rechts und wächst nach unten. Höhe so
-     begrenzen, dass sie samt Topbar sicher in den sichtbaren Bereich passt (die
-     Topbar kann auf schmalen Handys mehrzeilig umbrechen). Innerhalb scrollt der
-     Inhalt, sodass alle Optionen erreichbar bleiben. */
-  @media (max-width: 640px) {
-    .legend { max-height: calc(100dvh - 160px); }
-  }
 
   .popup-box { font-size: 13px; width: 300px; max-width: 80vw; line-height: 1.45; }
   .leaflet-popup-content { margin: 12px 14px; }
@@ -950,8 +947,10 @@ const IS_MOBILE_LAYOUT = window.innerWidth <= 640;
 const legend = L.control({ position: IS_MOBILE_LAYOUT ? "topright" : "bottomleft" });
 const hiddenCategories = new Set();
 
+let legendDiv = null;
 legend.onAdd = function () {
   const div = L.DomUtil.create("div", "legend");
+  legendDiv = div;
   if (IS_MOBILE_LAYOUT) div.classList.add("collapsed");
   let catListHtml = "";
   Object.entries(CATEGORY_COLORS).forEach(([cat, color]) => {
@@ -1004,6 +1003,20 @@ legend.onAdd = function () {
   return div;
 };
 legend.addTo(map);
+
+// Legenden-Höhe deterministisch aus der TATSÄCHLICHEN Kartenhöhe ableiten statt die
+// (mehrzeilig umbrechende) Topbar-Höhe zu raten. So passt die aufgeklappte Legende
+// immer komplett in den sichtbaren Bereich und die unterste Option ist antippbar,
+// ohne dass iOS beim Loslassen wieder hochscrollt.
+function sizeLegend() {
+  if (!legendDiv || !IS_MOBILE_LAYOUT) return;
+  const mapH = map.getContainer().clientHeight;
+  legendDiv.style.maxHeight = Math.max(140, mapH - 20) + "px";
+}
+sizeLegend();
+map.on("resize", sizeLegend);
+window.addEventListener("resize", sizeLegend);
+window.addEventListener("orientationchange", () => setTimeout(sizeLegend, 350));
 
 const markersLayer = L.layerGroup().addTo(map);
 const markerById = {};
